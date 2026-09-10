@@ -16,7 +16,6 @@
     height: 100%;
     margin: 0;
   }
-
   body {
     font-family: 'Georgia', 'Times New Roman', serif;
     background-image: var(--bg-image);
@@ -24,7 +23,6 @@
     background-position: center;
     background-repeat: no-repeat;
     background-attachment: fixed;
-    /* Fallback color shows if no image is set */
     background-color: #2b2b2b;
     display: flex;
     align-items: center;
@@ -32,19 +30,17 @@
     min-height: 100vh;
     padding: 20px;
   }
-
   .content-box {
-    background: rgba(20, 20, 20, 0.72);
+    background: rgba(20, 20, 20, 0.78);
     backdrop-filter: blur(4px);
     color: #f5f2ea;
-    max-width: 700px;
+    max-width: 760px;
     width: 100%;
-    padding: 50px 45px;
+    padding: 45px 45px 35px;
     border-radius: 12px;
     box-shadow: 0 15px 45px rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
-
   .content-box h1 {
     margin-top: 0;
     font-size: 2.4em;
@@ -53,40 +49,227 @@
     padding-bottom: 15px;
     margin-bottom: 25px;
   }
-
   .content-box p {
     font-size: 1.15em;
     line-height: 1.7;
     margin-bottom: 20px;
   }
-
   .content-box p:last-child {
     margin-bottom: 0;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-bottom: none;
+    color: #e8e2d4;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 1em;
+    letter-spacing: 0.5px;
+    padding: 10px 18px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .tab-btn:hover {
+    background: rgba(255,255,255,0.14);
+  }
+  .tab-btn.active {
+    background: #c9a24b;
+    color: #1a1a1a;
+    font-weight: bold;
+    border-color: #c9a24b;
+  }
+
+  .tab-panel {
+    display: none;
+  }
+  .tab-panel.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .achievement {
+    background: rgba(255,255,255,0.05);
+    border-left: 3px solid #c9a24b;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+  }
+  .achievement h3 {
+    margin: 0 0 8px 0;
+    color: #c9a24b;
+    font-size: 1.05em;
+    letter-spacing: 0.5px;
+  }
+  .achievement p {
+    font-size: 1em;
+    margin-bottom: 0;
+    line-height: 1.6;
+  }
+
+  pre.ascii {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.62em;
+    line-height: 1.15;
+    color: #f5f2ea;
+    background: rgba(0,0,0,0.35);
+    padding: 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    white-space: pre;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .caption {
+    text-align: center;
+    font-style: italic;
+    color: #c9a24b;
+    margin-top: 14px;
+    font-size: 1em;
   }
 </style>
 </head>
 <body>
+<div class="content-box">
+  <h1>Roland & His Motorcycle</h1>
 
-  <div class="content-box">
-    <h1>Roland & His Motorcycle</h1>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="about">About Roland</button>
+    <button class="tab-btn" data-tab="achievements">Legendary Rides</button>
+    <button class="tab-btn" data-tab="ascii">Portrait</button>
+  </div>
+
+  <!-- ABOUT TAB -->
+  <div class="tab-panel active" id="about">
     <p>
-      Roland has always felt most at home with the wind in his face and the
-      open road ahead of him. His motorcycle isn't just a machine — it's an
-      extension of who he is, carrying him toward every horizon he's ever
-      chased.
+      Roland is the kind of man who turns heads without trying. Tall, broad-shouldered, and built like
+      he spends his mornings hauling engine blocks for fun, he's got a jawline sharp enough to cut
+      wind resistance and a grin that's gotten him out of more speeding tickets than anyone would admit.
+      Still young, still hungry for the horizon, he carries himself with the easy confidence of someone
+      who's never once doubted where the road was taking him.
     </p>
     <p>
-      Whether he's tearing down a coastal highway at sunset or working
-      quietly in the garage tuning every last detail, Roland treats his ride
-      with the same care and respect most people reserve for old friends.
-      Every scratch on the tank and every mile on the odometer tells part of
-      his story.
+      His motorcycle — a gleaming, growling machine of chrome and midnight black — isn't just transportation,
+      it's a partner in crime. He calls her Valkyrie, and together they've logged more miles chasing
+      sunsets than most people log in a lifetime. Every dent in the tank, every worn patch on the seat,
+      is a chapter in a story that's still being written.
     </p>
     <p>
-      Edit this text (and the background image at the top of the file) to
-      make the page your own.
+      Whether he's leaning into a hairpin turn at speeds that would make lesser riders flinch, or
+      crouched in the garage at 2 a.m. with grease on his knuckles fine-tuning her carburetor, Roland
+      treats every mile like it matters. Because to him, it does.
     </p>
   </div>
 
+  <!-- ACHIEVEMENTS TAB -->
+  <div class="tab-panel" id="achievements">
+    <p>Every legend needs a highlight reel. Here's Roland's — verified by absolutely no one, and true by all accounts that matter.</p>
+
+    <div class="achievement">
+      <h3>🌠 The Meteor Incident</h3>
+      <p>
+        When a meteor the size of a delivery van screamed toward a sleeping town at 3 a.m., Roland was
+        the only one awake to see it. Gunning Valkyrie up the old grain silo ramp, he launched off the top,
+        planted his front tire dead-center on the falling rock, and rode it sideways until it burned itself
+        out over the reservoir. He landed the bike clean. Didn't even spill his coffee.
+      </p>
+    </div>
+
+    <div class="achievement">
+      <h3>⚡ Outrunning a Lightning Storm</h3>
+      <p>
+        Caught in the open during a supercell on Route 9, Roland didn't pull over like everyone else.
+        He dropped the throttle and raced the storm for eleven miles, lightning striking the road behind
+        him step for step, until he ducked under a highway overpass a half-second before the sky lit up
+        white. The overpass still has the scorch mark. Locals call it "Roland's Line."
+      </p>
+    </div>
+
+    <div class="achievement">
+      <h3>🐊 The Bayou Jump</h3>
+      <p>
+        A washed-out bridge in the Louisiana bayou left a forty-foot gap over water full of alligators.
+        Roland didn't slow down — he used a fallen cypress trunk as a ramp and cleared the whole thing
+        with two feet to spare, landing so smoothly that the fisherman watching from shore swore he never
+        heard the engine cut out mid-air.
+      </p>
+    </div>
+
+    <div class="achievement">
+      <h3>🏔️ The Vertical Mile</h3>
+      <p>
+        On a dare, Roland once rode Valkyrie straight up the near-vertical face of Widow's Peak, a mile-long
+        climb of loose scree and switchbacks that had claimed three off-road trucks before him. He reached
+        the summit in under six minutes, parked, and watched the sunrise like it was just another Tuesday.
+      </p>
+    </div>
+
+    <div class="achievement">
+      <h3>🌪️ Threading the Tornado</h3>
+      <p>
+        During a freak double-tornado touchdown outside town, Roland threaded Valkyrie through the narrow,
+        shifting gap between the two funnels — a gap that opened and closed like a held breath — emerging
+        on the other side with nothing but a windswept jacket and a story nobody quite believes.
+      </p>
+    </div>
+  </div>
+
+  <!-- ASCII ART TAB -->
+  <div class="tab-panel" id="ascii">
+    <pre class="ascii">
+                              ___
+                         ____/ o \____
+                        /   __---__   \
+                   ____/  _/       \_  \____
+                  /    \_/    (^)    \_/    \
+                 |    __|    /___\    |__    |
+                 |   /  |   |     |   |  \   |
+                  \_/   |___|     |___|   \_/
+                        /     \ /     \
+                       |_______|_______|
+                            |     |
+                      ______|     |______
+                     /      |     |      \
+                    |   ____|     |____   |
+                    |  /    |     |    \  |
+        .-----------+-'     |     |     '-+-----------.
+       (  ___________________|_____|___________________ )
+        '-|  ___  |                         |  ___  |-'
+          | (o o) |     R O L A N D         | (o o) |
+           \_-_-_/       + VALKYRIE          \_-_-_/
+          /      \      -----------         /      \
+         |  ____  |                        |  ____  |
+          \/    \/                          \/    \/
+    </pre>
+    <p class="caption">— Roland & Valkyrie, somewhere on the open road —</p>
+  </div>
+</div>
+
+<script>
+  const buttons = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.tab-panel');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+</script>
 </body>
 </html>
