@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Icon Forge</title>
+<style>
+  :root {
+    --accent: #3fae74;
+    --panel: #16231d;
+    --panel-2: #1d2f27;
+    --line: rgba(255, 255, 255, 0.12);
+    --text: #eef2ef;
+    --muted: rgba(238, 242, 239, 0.62);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    font-family: 'Trebuchet MS', sans-serif;
+    background: #0d1613;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 14px;
+    margin-bottom: 8px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.9em;
+    letter-spacing: 0.5px;
+  }
+  .sub {
+    color: var(--muted);
+    margin: 10px 0 26px;
+    font-size: 0.95em;
+    line-height: 1.5;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  /* Drop zone */
+  #drop {
+    border: 2px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 12px;
+    padding: 26px 20px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    margin-bottom: 20px;
+  }
+  #drop:hover, #drop.over {
+    border-color: var(--accent);
+    background: rgba(63, 174, 116, 0.08);
+  }
+  #drop b { color: var(--text); }
+  #drop small { display: block; margin-top: 7px; font-size: 0.85em; }
+
+  /* Preview */
+  .stage {
+    background:
+      repeating-conic-gradient(#20302a 0% 25%, #1a2621 0% 50%) 50% / 22px 22px;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+  }
+  #preview {
+    width: 260px;
+    height: 260px;
+    max-width: 100%;
+    image-rendering: auto;
+  }
+
+  .sizes {
+    display: flex;
+    align-items: flex-end;
+    gap: 22px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .size-chip { text-align: center; }
+  .size-chip canvas { display: block; margin: 0 auto 6px; }
+  .size-chip span { font-size: 0.75em; color: var(--muted); }
+
+  /* Controls */
+  .ctrl { margin-bottom: 17px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.88em;
+    letter-spacing: 0.4px;
+    margin-bottom: 7px;
+    color: var(--muted);
+  }
+  .ctrl label b { color: var(--accent); font-weight: bold; }
+
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  .seg {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .seg button {
+    flex: 1;
+    min-width: 62px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 0.85em;
+    padding: 8px 6px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0d1613;
+    font-weight: bold;
+  }
+
+  .row { display: flex; gap: 10px; align-items: center; }
+  input[type="color"] {
+    width: 100%;
+    height: 38px;
+    padding: 2px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    cursor: pointer;
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.9em;
+    cursor: pointer;
+    color: var(--muted);
+    margin-bottom: 11px;
+  }
+  .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+  .swatch-note {
+    margin: 8px 0 14px;
+    font-size: 0.78em;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0d1613;
+    border: none;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-weight: bold;
+    font-size: 1em;
+    letter-spacing: 0.4px;
+    padding: 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+  }
+  .btn:hover:not(:disabled) { filter: brightness(1.1); }
+  .btn:disabled { background: rgba(255,255,255,0.12); color: var(--muted); cursor: default; }
+  .btn.ghost {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    margin-top: 9px;
+    font-weight: normal;
+  }
+  .btn.preset {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 11px;
+  }
+  .btn.preset:hover { background: rgba(63, 174, 116, 0.12); filter: none; }
+  .preset-note {
+    margin: 9px 0 20px;
+    font-size: 0.8em;
+    color: var(--muted);
+    line-height: 1.45;
+    text-align: center;
+  }
+
+  .hint {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85em;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  code {
+    display: block;
+    background: #0a120f;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 11px;
+    margin-top: 9px;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.92em;
+    color: var(--accent);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .status {
+    margin-top: 12px;
+    font-size: 0.86em;
+    color: var(--accent);
+    min-height: 1.3em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Icon Forge</h1></header>
+  <p class="sub">
+    Drop in artwork, shape it, and export a full macOS <b>.iconset</b> — every size Apple asks for,
+    zipped and ready for <b>iconutil</b>. Everything runs in your browser; nothing is uploaded.
+  </p>
+
+  <div class="layout">
+    <div class="card">
+      <div id="drop">
+        <b>Drop an image here</b>
+        <small>or click to choose · you can also paste from the clipboard · PNG, JPG, SVG, WebP</small>
+        <input type="file" id="file" accept="image/*" hidden>
+      </div>
+
+      <div class="stage">
+        <canvas id="preview" width="512" height="512"></canvas>
+      </div>
+
+      <div class="sizes" id="sizes"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn preset" id="macos">Use macOS proportions</button>
+      <p class="preset-note">Apple's grid: squircle at 824 of 1024, artwork filling the shape.</p>
+
+      <div class="ctrl">
+        <label>Shape</label>
+        <div class="seg" id="shape">
+          <button data-val="squircle" class="on">Squircle</button>
+          <button data-val="rounded">Rounded</button>
+          <button data-val="circle">Circle</button>
+          <button data-val="square">Square</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Artwork</label>
+        <div class="seg" id="fit">
+          <button data-val="fill" class="on">Fill &amp; crop</button>
+          <button data-val="contain">Fit inside</button>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Recolor artwork</label>
+        <div class="seg" id="recolor">
+          <button data-val="none" class="on">None</button>
+          <button data-val="tint">Tint</button>
+          <button data-val="duotone">Duotone</button>
+          <button data-val="solid">Solid</button>
+        </div>
+      </div>
+
+      <div class="ctrl" id="recolors" hidden>
+        <div class="row">
+          <input type="color" id="r1" value="#3fae74">
+          <input type="color" id="r2" value="#ffffff">
+        </div>
+        <p class="swatch-note" id="recolor-note"></p>
+        <label>Strength <b id="strength-v">100%</b></label>
+        <input type="range" id="strength" min="0" max="100" value="100">
+      </div>
+
+      <div class="ctrl">
+        <label>Backdrop</label>
+        <div class="seg" id="bgmode">
+          <button data-val="none" class="on">None</button>
+          <button data-val="solid">Solid</button>
+          <button data-val="gradient">Gradient</button>
+        </div>
+      </div>
+
+      <div class="ctrl" id="colors" hidden>
+        <div class="row">
+          <input type="color" id="c1" value="#3fae74">
+          <input type="color" id="c2" value="#134a31">
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <label>Zoom <b id="scale-v">100%</b></label>
+        <input type="range" id="scale" min="50" max="220" value="100">
+      </div>
+
+      <div class="ctrl">
+        <label>Outer margin <b id="margin-v">9.8%</b></label>
+        <input type="range" id="margin" min="0" max="25" step="0.1" value="9.8">
+      </div>
+
+      <div class="ctrl" id="radius-ctrl">
+        <label>Corner radius <b id="radius-v">22%</b></label>
+        <input type="range" id="radius" min="0" max="50" value="22">
+      </div>
+
+      <label class="toggle">
+        <input type="checkbox" id="shadow" checked> Drop shadow
+      </label>
+
+      <button class="btn" id="export" disabled>Download .iconset (zip)</button>
+      <button class="btn ghost" id="png" disabled>Just the 1024px PNG</button>
+      <div class="status" id="status"></div>
+
+      <div class="hint">
+        Unzip it, then in Terminal:
+        <code>iconutil -c icns AppIcon.iconset</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SIZES = [16, 32, 64, 128, 256, 512, 1024];
+const ICONSET = [
+  ['icon_16x16.png', 16],       ['icon_16x16@2x.png', 32],
+  ['icon_32x32.png', 32],       ['icon_32x32@2x.png', 64],
+  ['icon_128x128.png', 128],    ['icon_128x128@2x.png', 256],
+  ['icon_256x256.png', 256],    ['icon_256x256@2x.png', 512],
+  ['icon_512x512.png', 512],    ['icon_512x512@2x.png', 1024]
+];
+
+const MACOS_MARGIN = 9.8;   // Apple's 824px body inside a 1024px canvas
+
+const state = {
+  img: null,
+  art: null,          // img after recoloring; falls back to img
+  shape: 'squircle',
+  fit: 'fill',
+  bg: 'none',
+  c1: '#3fae74',
+  c2: '#134a31',
+  recolor: 'none',
+  r1: '#3fae74',
+  r2: '#ffffff',
+  strength: 100,
+  scale: 100,
+  margin: MACOS_MARGIN,
+  radius: 22,
+  shadow: true
+};
+
+const $ = id => document.getElementById(id);
+const preview = $('preview');
+const statusEl = $('status');
+
+/* ---------- shape paths ---------- */
+
+function squirclePath(ctx, x, y, size) {
+  const n = 5;                     // superellipse exponent, close to Apple's curve
+  const r = size / 2;
+  const cx = x + r, cy = y + r;
+  const steps = 180;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI * 2;
+    const ct = Math.cos(t), st = Math.sin(t);
+    const px = cx + r * Math.sign(ct) * Math.pow(Math.abs(ct), 2 / n);
+    const py = cy + r * Math.sign(st) * Math.pow(Math.abs(st), 2 / n);
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function roundedPath(ctx, x, y, size, radius) {
+  const r = Math.min(radius, size / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + size - r, y);
+  ctx.quadraticCurveTo(x + size, y, x + size, y + r);
+  ctx.lineTo(x + size, y + size - r);
+  ctx.quadraticCurveTo(x + size, y + size, x + size - r, y + size);
+  ctx.lineTo(x + r, y + size);
+  ctx.quadraticCurveTo(x, y + size, x, y + size - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function bodyPath(ctx, x, y, size) {
+  if (state.shape === 'squircle') return squirclePath(ctx, x, y, size);
+  if (state.shape === 'circle') {
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    return;
+  }
+  if (state.shape === 'square') return roundedPath(ctx, x, y, size, 0);
+  return roundedPath(ctx, x, y, size, size * (state.radius / 100));
+}
+
+/* ---------- recolouring ---------- */
+
+const RECOLOR_MAX = 1024;   // export never exceeds this, so never work larger
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function hueToRgb(p, q, t) {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
+function hslToRgb(h, s, l) {
+  if (s === 0) { const v = l * 255; return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [
+    hueToRgb(p, q, h + 1 / 3) * 255,
+    hueToRgb(p, q, h) * 255,
+    hueToRgb(p, q, h - 1 / 3) * 255
+  ];
+}
+
+function buildArt() {
+  const img = state.img;
+  if (!img) { state.art = null; return; }
+  if (state.recolor === 'none' || state.strength === 0) { state.art = img; return; }
+
+  const k = Math.min(1, RECOLOR_MAX / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * k));
+  const h = Math.max(1, Math.round(img.height * k));
+
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  c.drawImage(img, 0, 0, w, h);
+
+  const id = c.getImageData(0, 0, w, h);
+  const d = id.data;
+  const a = hexToRgb(state.r1);
+  const b = hexToRgb(state.r2);
+  const [th, ts] = rgbToHsl(a.r, a.g, a.b);
+  const mix = state.strength / 100;
+
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const sr = d[i], sg = d[i + 1], sb = d[i + 2];
+    let nr, ng, nb;
+
+    if (state.recolor === 'solid') {
+      nr = a.r; ng = a.g; nb = a.b;
+    } else if (state.recolor === 'duotone') {
+      const lum = (0.2126 * sr + 0.7152 * sg + 0.0722 * sb) / 255;
+      nr = a.r + (b.r - a.r) * lum;
+      ng = a.g + (b.g - a.g) * lum;
+      nb = a.b + (b.b - a.b) * lum;
+    } else {                                   // tint: keep shading, swap colour
+      const [, , sl] = rgbToHsl(sr, sg, sb);
+      [nr, ng, nb] = hslToRgb(th, ts, sl);
+    }
+
+    d[i]     = sr + (nr - sr) * mix;
+    d[i + 1] = sg + (ng - sg) * mix;
+    d[i + 2] = sb + (nb - sb) * mix;
+  }
+
+  c.putImageData(id, 0, 0);
+  state.art = cv;
+}
+
+function refresh() {
+  buildArt();
+  renderAll();
+}
+
+/* ---------- rendering ---------- */
+
+function render(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+  if (!state.img) return;
+  const art = state.art || state.img;
+
+  const margin = size * (state.margin / 100);
+  const body = size - margin * 2;
+
+  // Build the icon on its own canvas, clipped to the shape, so nothing can
+  // spill past the silhouette and the shadow traces the real outline.
+  const off = document.createElement('canvas');
+  off.width = off.height = size;
+  const o = off.getContext('2d');
+
+  o.save();
+  bodyPath(o, margin, margin, body);
+  o.clip();
+
+  if (state.bg !== 'none') {
+    if (state.bg === 'gradient') {
+      const g = o.createLinearGradient(margin, margin, margin + body, margin + body);
+      g.addColorStop(0, state.c1);
+      g.addColorStop(1, state.c2);
+      o.fillStyle = g;
+    } else {
+      o.fillStyle = state.c1;
+    }
+    o.fillRect(margin, margin, body, body);
+  }
+
+  const base = state.fit === 'fill'
+    ? Math.max(body / art.width, body / art.height)   // cover the whole shape
+    : Math.min(body / art.width, body / art.height);  // sit inside it
+  const k = base * (state.scale / 100);
+  const w = art.width * k, h = art.height * k;
+
+  o.imageSmoothingEnabled = true;
+  o.imageSmoothingQuality = 'high';
+  o.drawImage(art, (size - w) / 2, (size - h) / 2, w, h);
+  o.restore();
+
+  ctx.save();
+  if (state.shadow) {
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
+    ctx.shadowBlur = size * 0.045;
+    ctx.shadowOffsetY = size * 0.022;
+  }
+  ctx.drawImage(off, 0, 0);
+  ctx.restore();
+}
+
+function renderAll() {
+  render(preview, 512);
+  document.querySelectorAll('#sizes canvas').forEach(c => {
+    render(c, Number(c.dataset.size));
+  });
+}
+
+/* ---------- small size strip ---------- */
+
+[16, 32, 64, 128].forEach(s => {
+  const chip = document.createElement('div');
+  chip.className = 'size-chip';
+  const c = document.createElement('canvas');
+  c.dataset.size = s;
+  c.style.width = s + 'px';
+  c.style.height = s + 'px';
+  const label = document.createElement('span');
+  label.textContent = s + 'px';
+  chip.append(c, label);
+  $('sizes').appendChild(chip);
+});
+
+/* ---------- loading images ---------- */
+
+function loadImage(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      state.img = img;
+      $('export').disabled = false;
+      $('png').disabled = false;
+      statusEl.textContent = img.width + ' × ' + img.height + ' loaded';
+      refresh();
+    };
+    img.onerror = () => { statusEl.textContent = "Couldn't read that image."; };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+const drop = $('drop');
+drop.addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => loadImage(e.target.files[0]));
+['dragenter', 'dragover'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => loadImage(e.dataTransfer.files[0]));
+window.addEventListener('paste', e => {
+  const item = [...(e.clipboardData.files || [])][0];
+  if (item) loadImage(item);
+});
+
+/* ---------- controls ---------- */
+
+function setSegment(containerId, value) {
+  $(containerId).querySelectorAll('button').forEach(b =>
+    b.classList.toggle('on', b.dataset.val === value));
+}
+
+function segment(containerId, key, onChange) {
+  $(containerId).addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    state[key] = btn.dataset.val;
+    setSegment(containerId, state[key]);
+    if (onChange) onChange();
+    renderAll();
+  });
+}
+
+segment('shape', 'shape', syncVisibility);
+segment('fit', 'fit');
+segment('bgmode', 'bg', syncVisibility);
+segment('recolor', 'recolor', () => { syncVisibility(); buildArt(); });
+
+const RECOLOR_NOTES = {
+  tint: 'Keeps the original shading, swaps the colour.',
+  duotone: 'Left colour maps to the darks, right to the lights.',
+  solid: 'Flattens the artwork to one colour, keeping its silhouette.'
+};
+
+function syncVisibility() {
+  $('radius-ctrl').hidden = state.shape !== 'rounded';
+  $('colors').hidden = state.bg === 'none';
+  $('recolors').hidden = state.recolor === 'none';
+  $('r2').hidden = state.recolor !== 'duotone';
+  $('recolor-note').textContent = RECOLOR_NOTES[state.recolor] || '';
+}
+
+function slider(id, key, suffix) {
+  $(id).addEventListener('input', e => {
+    state[key] = Number(e.target.value);
+    $(id + '-v').textContent = e.target.value + suffix;
+    renderAll();
+  });
+}
+slider('scale', 'scale', '%');
+slider('margin', 'margin', '%');
+slider('radius', 'radius', '%');
+
+function setSlider(id, key, value, suffix) {
+  state[key] = value;
+  $(id).value = value;
+  $(id + '-v').textContent = value + suffix;
+}
+
+$('c1').addEventListener('input', e => { state.c1 = e.target.value; renderAll(); });
+$('c2').addEventListener('input', e => { state.c2 = e.target.value; renderAll(); });
+$('shadow').addEventListener('change', e => { state.shadow = e.target.checked; renderAll(); });
+
+$('r1').addEventListener('input', e => { state.r1 = e.target.value; refresh(); });
+$('r2').addEventListener('input', e => { state.r2 = e.target.value; refresh(); });
+$('strength').addEventListener('input', e => {
+  state.strength = Number(e.target.value);
+  $('strength-v').textContent = e.target.value + '%';
+  refresh();
+});
+
+$('macos').addEventListener('click', () => {
+  state.shape = 'squircle';
+  state.fit = 'fill';
+  state.shadow = true;
+  setSegment('shape', 'squircle');
+  setSegment('fit', 'fill');
+  setSlider('scale', 'scale', 100, '%');
+  setSlider('margin', 'margin', MACOS_MARGIN, '%');
+  $('shadow').checked = true;
+  syncVisibility();
+  renderAll();
+  statusEl.textContent = 'Set to macOS proportions.';
+});
+
+syncVisibility();
+
+/* ---------- zip writer (store, no compression) ---------- */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function makeZip(entries) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+
+  entries.forEach(entry => {
+    const name = enc.encode(entry.name);
+    const data = entry.data;
+    const crc = crc32(data);
+
+    const local = new Uint8Array(30 + name.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, name.length, true);
+    local.set(name, 30);
+
+    const cen = new Uint8Array(46 + name.length);
+    const cv = new DataView(cen.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, name.length, true);
+    cv.setUint32(42, offset, true);
+    cen.set(name, 46);
+
+    parts.push(local, data);
+    central.push(cen);
+    offset += local.length + data.length;
+  });
+
+  const centralSize = central.reduce((n, c) => n + c.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, entries.length, true);
+  ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+
+  return new Blob([...parts, ...central, end], { type: 'application/zip' });
+}
+
+/* ---------- export ---------- */
+
+function canvasBytes(size) {
+  const c = document.createElement('canvas');
+  render(c, size);
+  return new Promise(resolve => {
+    c.toBlob(async blob => resolve(new Uint8Array(await blob.arrayBuffer())), 'image/png');
+  });
+}
+
+function save(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+$('export').addEventListener('click', async () => {
+  statusEl.textContent = 'Rendering 10 sizes…';
+  $('export').disabled = true;
+  const entries = [];
+  for (const [name, size] of ICONSET) {
+    entries.push({ name: 'AppIcon.iconset/' + name, data: await canvasBytes(size) });
+  }
+  save(makeZip(entries), 'AppIcon.iconset.zip');
+  statusEl.textContent = 'Done — unzip, then run iconutil.';
+  $('export').disabled = false;
+});
+
+$('png').addEventListener('click', async () => {
+  const bytes = await canvasBytes(1024);
+  save(new Blob([bytes], { type: 'image/png' }), 'icon_1024.png');
+  statusEl.textContent = 'Saved icon_1024.png';
+});
+</script>
+</body>
+</html>
