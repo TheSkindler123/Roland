@@ -7,6 +7,7 @@
 <style>
   :root {
     --bg-image: url('RolandSkin.jpg');
+    --meat-image: url('RawMuscle.jpg');
     --accent: #3fae74;
   }
 
@@ -192,8 +193,16 @@
     transform: translateY(0);
   }
   .head, .torso {
-    background-color: rgba(255, 255, 255, 0.07);
-    border: 2px dashed rgba(255, 255, 255, 0.45);
+    background-color: #6b1a15;
+    background-image:
+      radial-gradient(ellipse at 34% 20%, rgba(255, 255, 255, 0.5) 0 5%, rgba(255, 235, 230, 0.16) 22%, transparent 48%),
+      var(--meat-image);
+    background-size: auto, 95px;
+    background-position: center;
+    border: 2px solid #3d0d0b;
+    box-shadow:
+      inset 0 -5px 9px rgba(0, 0, 0, 0.5),
+      inset 0 2px 6px rgba(255, 160, 140, 0.2);
   }
   .head {
     width: 34px;
@@ -211,18 +220,19 @@
     margin-top: 3px;
   }
   .eye {
-    width: 4px;
-    height: 4px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.8);
+    background: #f3e9e4;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
   }
   .person.skinned .head,
   .person.skinned .torso {
-    background-image: var(--bg-image);
-    background-size: 150px;
+    background-image: var(--skin-bg, var(--bg-image));
+    background-size: var(--skin-size, 150px);
     background-position: center;
-    border-style: solid;
     border-color: var(--accent);
+    box-shadow: none;
   }
   .person.skinned .eye {
     background: #1a1a1a;
@@ -269,6 +279,83 @@
     color: var(--accent);
     font-style: italic;
     margin-top: 16px;
+  }
+
+  /* Shop counter */
+  .shop {
+    margin-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .shop-title {
+    color: var(--accent);
+    font-size: 1em;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin: 20px 0 12px;
+  }
+  .shop-item {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .shop-item.equipped {
+    border-color: var(--accent);
+  }
+  .swatch {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+  }
+  .shop-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .shop-info h3 {
+    margin: 0 0 3px;
+    color: #f5f2ea;
+    font-size: 1em;
+    letter-spacing: 0.3px;
+  }
+  .shop-info p {
+    margin: 0;
+    font-size: 0.88em;
+    line-height: 1.4;
+    opacity: 0.75;
+  }
+  .shop-buy {
+    flex: none;
+    background: var(--accent);
+    color: #10281c;
+    border: none;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-weight: bold;
+    font-size: 0.9em;
+    letter-spacing: 0.3px;
+    padding: 9px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter 0.2s ease;
+  }
+  .shop-buy:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
+  .shop-buy:disabled {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: default;
   }
 
   @media (max-width: 560px) {
@@ -413,12 +500,21 @@
       <span>Skinned: <b id="score">0</b></span>
       <span>Time: <b id="time">30</b></span>
       <span>Best: <b id="best">0</b></span>
+      <span>Credits: <b id="credits">0</b></span>
     </div>
 
     <div class="game-grid" id="grid"></div>
 
     <button class="game-btn" id="game-btn">Open the shop</button>
     <p class="game-msg" id="game-msg"></p>
+
+    <div class="shop">
+      <h2 class="shop-title">Skins on the rack</h2>
+      <div id="skin-shop"></div>
+
+      <h2 class="shop-title">Shop upgrades</h2>
+      <div id="perk-shop"></div>
+    </div>
   </div>
 </div>
 
@@ -441,48 +537,211 @@
   });
 
   /* Skin Shop */
+  const SKINS = [
+    { id: 'roland', name: 'Roland Original', price: 0,
+      desc: 'The house blend, straight off the man himself.',
+      bg: 'var(--bg-image)', size: '150px' },
+    { id: 'sunburnt', name: 'Sunburnt', price: 30,
+      desc: 'Six hours on the highway, zero sunscreen.',
+      bg: 'linear-gradient(rgba(226, 84, 38, 0.45), rgba(226, 84, 38, 0.45)), var(--bg-image)', size: '150px' },
+    { id: 'chrome', name: 'Chrome Valkyrie', price: 70,
+      desc: 'Same finish as the bike. Buffs right out.',
+      bg: 'linear-gradient(135deg, #f2f4f8, #8b94a6 38%, #ffffff 52%, #6d7684 70%, #cfd6e2)' },
+    { id: 'neon', name: 'Neon Rider', price: 120,
+      desc: 'Visible from three counties over.',
+      bg: 'linear-gradient(135deg, #ff4fd8, #7a3cff 55%, #2de2ff)' },
+    { id: 'lizard', name: 'Swamp Lizard', price: 180,
+      desc: 'Bayou approved. Alligator not included.',
+      bg: 'repeating-radial-gradient(circle at 50% 50%, #358a47 0 3px, #1e5a2b 3px 6px)' },
+    { id: 'leather', name: 'Midnight Leather', price: 260,
+      desc: "Valkyrie's saddle, tailored to fit.",
+      bg: 'linear-gradient(145deg, #4a3526, #241a12 60%, #3b2a1d)' },
+    { id: 'galaxy', name: 'Deep Space', price: 380,
+      desc: 'He rode past the atmosphere once. It stuck.',
+      bg: 'radial-gradient(circle at 25% 30%, #fff 0 1.2px, transparent 1.4px), ' +
+          'radial-gradient(circle at 72% 62%, #fff 0 1.2px, transparent 1.4px), ' +
+          'radial-gradient(circle at 45% 82%, #ffd9f7 0 1.2px, transparent 1.4px), ' +
+          'linear-gradient(150deg, #1b1145, #0a0620 60%, #2a1a5e)' },
+    { id: 'gold', name: 'Solid Gold', price: 550,
+      desc: 'Purely decorative. Weighs an absolute ton.',
+      bg: 'linear-gradient(140deg, #fff3b0, #d4a017 40%, #8a6508 62%, #f5d76e)' }
+  ];
+
+  const PERKS = [
+    { id: 'shift', name: 'Longer Shifts', price: 50, icon: '⏱',
+      desc: 'Fifteen more seconds on the clock.' },
+    { id: 'sticky', name: 'Sticky Hands', price: 90, icon: '🤲',
+      desc: 'They linger 50% longer before ducking.' },
+    { id: 'pay', name: 'Double Pay', price: 150, icon: '💰',
+      desc: 'Every skin is worth two instead of one.' },
+    { id: 'booth', name: 'Extra Booths', price: 220, icon: '🕳',
+      desc: 'Three more holes in the shop floor.' },
+    { id: 'helper', name: 'Apprentice', price: 320, icon: '🧑‍🔧',
+      desc: 'Skins one for you every few seconds.' }
+  ];
+
   const grid = document.getElementById('grid');
   const scoreEl = document.getElementById('score');
   const timeEl = document.getElementById('time');
   const bestEl = document.getElementById('best');
+  const creditsEl = document.getElementById('credits');
   const msgEl = document.getElementById('game-msg');
   const gameBtn = document.getElementById('game-btn');
+  const skinShopEl = document.getElementById('skin-shop');
+  const perkShopEl = document.getElementById('perk-shop');
 
-  const HOLES = 9;
-  const ROUND_SECONDS = 30;
+  const BASE_SECONDS = 30;
   const holes = [];
   const duckTimers = new Map();
   let score = 0;
-  let timeLeft = ROUND_SECONDS;
+  let timeLeft = BASE_SECONDS;
   let running = false;
   let tickId = null;
   let spawnId = null;
-  let best = 0;
+  let helperId = null;
 
-  for (let i = 0; i < HOLES; i++) {
-    const hole = document.createElement('div');
-    hole.className = 'hole';
-    hole.innerHTML =
-      '<div class="person">' +
-        '<div class="head"><span class="eye"></span><span class="eye"></span></div>' +
-        '<div class="torso"></div>' +
-      '</div>';
-    hole.addEventListener('click', () => skin(hole));
-    grid.appendChild(hole);
-    holes.push(hole);
+  const save = loadSave();
+
+  function loadSave() {
+    const state = { credits: 0, best: 0, skins: ['roland'], equipped: 'roland', perks: [] };
+    try {
+      const raw = localStorage.getItem('skinShopSave');
+      if (raw) return Object.assign(state, JSON.parse(raw));
+      state.best = parseInt(localStorage.getItem('skinShopBest'), 10) || 0;
+    } catch (e) {}
+    return state;
   }
 
-  try {
-    best = parseInt(localStorage.getItem('skinShopBest'), 10) || 0;
-  } catch (e) {}
-  bestEl.textContent = best;
+  function persist() {
+    try { localStorage.setItem('skinShopSave', JSON.stringify(save)); } catch (e) {}
+  }
+
+  function hasPerk(id) { return save.perks.indexOf(id) !== -1; }
+  function roundSeconds() { return BASE_SECONDS + (hasPerk('shift') ? 15 : 0); }
+  function stayMs() { return (900 + Math.random() * 900) * (hasPerk('sticky') ? 1.5 : 1); }
+  function payout() { return hasPerk('pay') ? 2 : 1; }
+  function holeCount() { return hasPerk('booth') ? 12 : 9; }
+
+  function syncGrid() {
+    while (holes.length < holeCount()) {
+      const hole = document.createElement('div');
+      hole.className = 'hole';
+      hole.innerHTML =
+        '<div class="person">' +
+          '<div class="head"><span class="eye"></span><span class="eye"></span></div>' +
+          '<div class="torso"></div>' +
+        '</div>';
+      hole.addEventListener('click', () => skin(hole));
+      grid.appendChild(hole);
+      holes.push(hole);
+    }
+  }
+
+  function applySkin() {
+    const worn = SKINS.filter(s => s.id === save.equipped)[0] || SKINS[0];
+    grid.style.setProperty('--skin-bg', worn.bg);
+    grid.style.setProperty('--skin-size', worn.size || 'cover');
+  }
+
+  function renderHud() {
+    bestEl.textContent = save.best;
+    creditsEl.textContent = save.credits;
+  }
+
+  function shopCard(item, swatchStyler, button) {
+    const card = document.createElement('div');
+    card.className = 'shop-item';
+    const swatch = document.createElement('div');
+    swatch.className = 'swatch';
+    swatchStyler(swatch);
+    const info = document.createElement('div');
+    info.className = 'shop-info';
+    const title = document.createElement('h3');
+    title.textContent = item.name;
+    const desc = document.createElement('p');
+    desc.textContent = item.desc;
+    info.append(title, desc);
+    card.append(swatch, info, button);
+    return card;
+  }
+
+  function renderShop() {
+    skinShopEl.innerHTML = '';
+    SKINS.forEach(s => {
+      const owned = save.skins.indexOf(s.id) !== -1;
+      const worn = save.equipped === s.id;
+      const btn = document.createElement('button');
+      btn.className = 'shop-buy';
+
+      if (worn) {
+        btn.textContent = 'Wearing';
+        btn.disabled = true;
+      } else if (owned) {
+        btn.textContent = 'Wear it';
+        btn.addEventListener('click', () => {
+          save.equipped = s.id;
+          persist();
+          applySkin();
+          renderShop();
+        });
+      } else {
+        btn.textContent = 'Buy · ' + s.price;
+        btn.disabled = save.credits < s.price;
+        btn.addEventListener('click', () => {
+          if (save.credits < s.price) return;
+          save.credits -= s.price;
+          save.skins.push(s.id);
+          save.equipped = s.id;
+          persist();
+          applySkin();
+          renderHud();
+          renderShop();
+        });
+      }
+
+      const card = shopCard(s, el => {
+        el.style.backgroundImage = s.bg;
+        el.style.backgroundSize = s.size || 'cover';
+      }, btn);
+      if (worn) card.classList.add('equipped');
+      skinShopEl.appendChild(card);
+    });
+
+    perkShopEl.innerHTML = '';
+    PERKS.forEach(p => {
+      const owned = hasPerk(p.id);
+      const btn = document.createElement('button');
+      btn.className = 'shop-buy';
+
+      if (owned) {
+        btn.textContent = 'Installed';
+        btn.disabled = true;
+      } else {
+        btn.textContent = 'Buy · ' + p.price;
+        btn.disabled = save.credits < p.price;
+        btn.addEventListener('click', () => {
+          if (save.credits < p.price) return;
+          save.credits -= p.price;
+          save.perks.push(p.id);
+          persist();
+          syncGrid();
+          renderHud();
+          renderShop();
+        });
+      }
+
+      const card = shopCard(p, el => { el.textContent = p.icon; }, btn);
+      if (owned) card.classList.add('equipped');
+      perkShopEl.appendChild(card);
+    });
+  }
 
   function popUp() {
     const idle = holes.filter(h => !h.classList.contains('up'));
     if (!idle.length) return;
     const hole = idle[Math.floor(Math.random() * idle.length)];
     hole.classList.add('up');
-    duckTimers.set(hole, setTimeout(() => duck(hole), 900 + Math.random() * 900));
+    duckTimers.set(hole, setTimeout(() => duck(hole), stayMs()));
   }
 
   function duck(hole) {
@@ -500,12 +759,12 @@
     if (!running || !hole.classList.contains('up') || person.classList.contains('skinned')) return;
 
     person.classList.add('skinned');
-    score++;
+    score += payout();
     scoreEl.textContent = score;
 
     const plus = document.createElement('span');
     plus.className = 'plus';
-    plus.textContent = '+1';
+    plus.textContent = '+' + payout();
     hole.appendChild(plus);
     setTimeout(() => plus.remove(), 600);
 
@@ -514,7 +773,7 @@
   }
 
   function scheduleSpawn() {
-    const delay = Math.max(280, 750 - (ROUND_SECONDS - timeLeft) * 14);
+    const delay = Math.max(280, 750 - (roundSeconds() - timeLeft) * 14);
     spawnId = setTimeout(() => {
       popUp();
       if (running) scheduleSpawn();
@@ -525,6 +784,7 @@
     running = false;
     clearInterval(tickId);
     clearTimeout(spawnId);
+    clearInterval(helperId);
     duckTimers.forEach(t => clearTimeout(t));
     duckTimers.clear();
     holes.forEach(h => {
@@ -536,20 +796,21 @@
   function endGame() {
     stopGame();
     gameBtn.textContent = 'Play again';
-    if (score > best) {
-      best = score;
-      bestEl.textContent = best;
-      try { localStorage.setItem('skinShopBest', String(best)); } catch (e) {}
-      msgEl.textContent = 'New shop record — ' + score + ' fully skinned. Roland would be proud.';
-    } else {
-      msgEl.textContent = 'Time! You skinned ' + score + '. The rest went home bare.';
-    }
+    save.credits += score;
+    const record = score > save.best;
+    if (record) save.best = score;
+    persist();
+    renderHud();
+    renderShop();
+    msgEl.textContent = record
+      ? 'New shop record — ' + score + ' skinned, ' + score + ' credits in the till.'
+      : 'Time! ' + score + ' skinned, ' + score + ' credits earned. The rest went home bare.';
   }
 
   function startGame() {
     stopGame();
     score = 0;
-    timeLeft = ROUND_SECONDS;
+    timeLeft = roundSeconds();
     scoreEl.textContent = '0';
     timeEl.textContent = timeLeft;
     msgEl.textContent = '';
@@ -560,10 +821,22 @@
       timeEl.textContent = timeLeft;
       if (timeLeft <= 0) endGame();
     }, 1000);
+    if (hasPerk('helper')) {
+      helperId = setInterval(() => {
+        const bare = holes.filter(h =>
+          h.classList.contains('up') && !h.querySelector('.person').classList.contains('skinned'));
+        if (bare.length) skin(bare[Math.floor(Math.random() * bare.length)]);
+      }, 4000);
+    }
     scheduleSpawn();
   }
 
   gameBtn.addEventListener('click', startGame);
+
+  syncGrid();
+  applySkin();
+  renderHud();
+  renderShop();
 </script>
 </body>
 </html>
