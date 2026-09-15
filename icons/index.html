@@ -347,17 +347,27 @@
         <input type="range" id="radius" min="0" max="50" value="22">
       </div>
 
+      <div class="ctrl">
+        <label>Top highlight <b id="glossamt-v">100%</b></label>
+        <input type="range" id="glossamt" min="0" max="250" value="100">
+      </div>
+
+      <label class="toggle">
+        <input type="checkbox" id="trim" checked> Trim transparent edges first
+      </label>
       <label class="toggle">
         <input type="checkbox" id="shadow" checked> Drop shadow
       </label>
 
-      <button class="btn" id="export" disabled>Download .iconset (zip)</button>
+      <button class="btn" id="icns" disabled>Download .icns</button>
+      <button class="btn ghost" id="export" disabled>.iconset folder (zip)</button>
       <button class="btn ghost" id="png" disabled>Just the 1024px PNG</button>
       <div class="status" id="status"></div>
 
       <div class="hint">
-        Unzip it, then in Terminal:
-        <code>iconutil -c icns AppIcon.iconset</code>
+        To apply it: select the app in Finder, press <b>⌘I</b>, click the small
+        icon at the top-left of the Info window, then paste the image or drag the
+        <b>.icns</b> onto it.
       </div>
     </div>
   </div>
@@ -390,7 +400,9 @@ const state = {
   scale: 100,
   margin: MACOS_MARGIN,
   radius: 22,
-  shadow: true
+  trim: true,
+  shadow: true,
+  glossAmt: 100
 };
 
 const $ = id => document.getElementById(id);
@@ -485,19 +497,53 @@ function hslToRgb(h, s, l) {
   ];
 }
 
+// Existing app icons ship with their own transparent padding baked in. Without
+// trimming, our margin stacks on top of theirs and the icon comes out too small.
+function opaqueBounds(ctx, w, h) {
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let top = h, bottom = -1, left = w, right = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] > 8) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  if (bottom < 0) return null;
+  return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+}
+
 function buildArt() {
   const img = state.img;
   if (!img) { state.art = null; return; }
-  if (state.recolor === 'none' || state.strength === 0) { state.art = img; return; }
+
+  const recoloring = state.recolor !== 'none' && state.strength > 0;
+  if (!recoloring && !state.trim) { state.art = img; return; }
 
   const k = Math.min(1, RECOLOR_MAX / Math.max(img.width, img.height));
-  const w = Math.max(1, Math.round(img.width * k));
-  const h = Math.max(1, Math.round(img.height * k));
+  let w = Math.max(1, Math.round(img.width * k));
+  let h = Math.max(1, Math.round(img.height * k));
 
-  const cv = document.createElement('canvas');
+  let cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
-  const c = cv.getContext('2d', { willReadFrequently: true });
+  let c = cv.getContext('2d', { willReadFrequently: true });
   c.drawImage(img, 0, 0, w, h);
+
+  if (state.trim) {
+    const box = opaqueBounds(c, w, h);
+    if (box && (box.w < w || box.h < h)) {
+      const t = document.createElement('canvas');
+      t.width = box.w; t.height = box.h;
+      const tc = t.getContext('2d', { willReadFrequently: true });
+      tc.drawImage(cv, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+      cv = t; c = tc; w = box.w; h = box.h;
+    }
+  }
+
+  if (!recoloring) { state.art = cv; return; }
 
   const id = c.getImageData(0, 0, w, h);
   const d = id.data;
@@ -580,13 +626,59 @@ function render(canvas, size) {
   o.imageSmoothingEnabled = true;
   o.imageSmoothingQuality = 'high';
   o.drawImage(art, (size - w) / 2, (size - h) / 2, w, h);
+
+  // Calibrated against real macOS icons: the system gloss is far subtler than
+  // it looks. Messages measures ~1 luminance step from top edge to body, so
+  // these stay low deliberately — a sheen, not a chrome strip.
+  if (state.glossAmt > 0) {
+    const a = state.glossAmt / 100;
+    o.globalCompositeOperation = 'source-atop';   // never paints empty space
+
+    const sheen = o.createLinearGradient(0, margin, 0, margin + body * 0.5);
+    sheen.addColorStop(0, 'rgba(255, 255, 255, ' + (0.05 * a) + ')');
+    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    o.fillStyle = sheen;
+    o.fillRect(margin, margin, body, body * 0.5);
+
+    const shade = o.createLinearGradient(0, margin + body * 0.55, 0, margin + body);
+    shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    shade.addColorStop(1, 'rgba(0, 0, 0, ' + (0.09 * a) + ')');
+    o.fillStyle = shade;
+    o.fillRect(margin, margin + body * 0.55, body, body * 0.45);
+
+    // Specular rim: brightest across the flat run of the top edge, fading out
+    // as the shape turns into the corners. The band clip keeps it off the
+    // bottom; the horizontal ramp keeps it off the sides.
+    o.save();
+    o.beginPath();
+    o.rect(margin, margin, body, body * 0.4);
+    o.clip();
+
+    const rim = o.createLinearGradient(margin, 0, margin + body, 0);
+    const peak = 0.62 * a, shoulder = 0.18 * a;
+    rim.addColorStop(0.00, 'rgba(255, 255, 255, 0)');
+    rim.addColorStop(0.17, 'rgba(255, 255, 255, ' + shoulder + ')');
+    rim.addColorStop(0.31, 'rgba(255, 255, 255, ' + peak + ')');
+    rim.addColorStop(0.50, 'rgba(255, 255, 255, ' + peak + ')');
+    rim.addColorStop(0.69, 'rgba(255, 255, 255, ' + peak + ')');
+    rim.addColorStop(0.83, 'rgba(255, 255, 255, ' + shoulder + ')');
+    rim.addColorStop(1.00, 'rgba(255, 255, 255, 0)');
+    o.strokeStyle = rim;
+    o.lineWidth = size * 0.007;
+    bodyPath(o, margin, margin, body);
+    o.stroke();
+    o.restore();
+
+    o.globalCompositeOperation = 'source-over';
+  }
+
   o.restore();
 
   ctx.save();
   if (state.shadow) {
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
-    ctx.shadowBlur = size * 0.045;
-    ctx.shadowOffsetY = size * 0.022;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = size * 0.055;
+    ctx.shadowOffsetY = size * 0.026;
   }
   ctx.drawImage(off, 0, 0);
   ctx.restore();
@@ -623,6 +715,7 @@ function loadImage(file) {
     const img = new Image();
     img.onload = () => {
       state.img = img;
+      $('icns').disabled = false;
       $('export').disabled = false;
       $('png').disabled = false;
       statusEl.textContent = img.width + ' × ' + img.height + ' loaded';
@@ -704,6 +797,12 @@ function setSlider(id, key, value, suffix) {
 $('c1').addEventListener('input', e => { state.c1 = e.target.value; renderAll(); });
 $('c2').addEventListener('input', e => { state.c2 = e.target.value; renderAll(); });
 $('shadow').addEventListener('change', e => { state.shadow = e.target.checked; renderAll(); });
+$('trim').addEventListener('change', e => { state.trim = e.target.checked; refresh(); });
+$('glossamt').addEventListener('input', e => {
+  state.glossAmt = Number(e.target.value);
+  $('glossamt-v').textContent = e.target.value + '%';
+  renderAll();
+});
 
 $('r1').addEventListener('input', e => { state.r1 = e.target.value; refresh(); });
 $('r2').addEventListener('input', e => { state.r2 = e.target.value; refresh(); });
@@ -721,6 +820,7 @@ $('macos').addEventListener('click', () => {
   setSegment('fit', 'fill');
   setSlider('scale', 'scale', 100, '%');
   setSlider('margin', 'margin', MACOS_MARGIN, '%');
+  setSlider('glossamt', 'glossAmt', 100, '%');
   $('shadow').checked = true;
   syncVisibility();
   renderAll();
@@ -797,6 +897,37 @@ function makeZip(entries) {
   return new Blob([...parts, ...central, end], { type: 'application/zip' });
 }
 
+/* ---------- icns writer ---------- */
+
+// OSType -> pixel size, matching what `iconutil -c icns` emits.
+const ICNS_TYPES = [
+  ['icp4', 16],  ['icp5', 32],  ['ic11', 32],  ['ic12', 64],
+  ['ic07', 128], ['ic13', 256], ['ic08', 256],
+  ['ic14', 512], ['ic09', 512], ['ic10', 1024]
+];
+
+function makeIcns(chunks) {
+  let total = 8;
+  chunks.forEach(c => { total += 8 + c.data.length; });
+
+  const out = new Uint8Array(total);
+  const dv = new DataView(out.buffer);
+  const enc = new TextEncoder();
+
+  out.set(enc.encode('icns'), 0);
+  dv.setUint32(4, total, false);              // icns is big-endian throughout
+
+  let off = 8;
+  chunks.forEach(c => {
+    out.set(enc.encode(c.type), off);
+    dv.setUint32(off + 4, 8 + c.data.length, false);
+    out.set(c.data, off + 8);
+    off += 8 + c.data.length;
+  });
+
+  return new Blob([out], { type: 'image/icns' });
+}
+
 /* ---------- export ---------- */
 
 function canvasBytes(size) {
@@ -815,6 +946,21 @@ function save(blob, name) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+$('icns').addEventListener('click', async () => {
+  $('icns').disabled = true;
+  statusEl.textContent = 'Building .icns…';
+  const cache = new Map();
+  const chunks = [];
+  for (const [type, size] of ICNS_TYPES) {
+    if (!cache.has(size)) cache.set(size, await canvasBytes(size));
+    chunks.push({ type, data: cache.get(size) });
+  }
+  const blob = makeIcns(chunks);
+  save(blob, 'AppIcon.icns');
+  statusEl.textContent = 'Saved AppIcon.icns (' + Math.round(blob.size / 1024) + ' KB)';
+  $('icns').disabled = false;
+});
 
 $('export').addEventListener('click', async () => {
   statusEl.textContent = 'Rendering 10 sizes…';
