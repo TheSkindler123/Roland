@@ -358,6 +358,83 @@
     cursor: default;
   }
 
+  /* The Garage forum */
+  .forum-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+  .forum-form input[type="text"],
+  .forum-form textarea {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #f5f2ea;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 1em;
+    resize: vertical;
+  }
+  .forum-form input[type="text"]:focus,
+  .forum-form textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .hp {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+  .forum-form-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .forum-status {
+    font-size: 0.9em;
+    color: var(--accent);
+    font-style: italic;
+  }
+  .forum-posts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .forum-post {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 4px;
+  }
+  .forum-post-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .forum-post-name {
+    color: var(--accent);
+    font-weight: bold;
+  }
+  .forum-post-time {
+    font-size: 0.8em;
+    opacity: 0.6;
+    white-space: nowrap;
+  }
+  .forum-post-msg {
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .forum-empty {
+    opacity: 0.7;
+    font-style: italic;
+  }
+
   @media (max-width: 560px) {
     .content-box {
       padding: 28px 20px 24px;
@@ -381,6 +458,7 @@
     <button class="tab-btn" data-tab="achievements">Legendary Rides</button>
     <button class="tab-btn" data-tab="ascii">Portrait</button>
     <button class="tab-btn" data-tab="game">Skin Shop</button>
+    <button class="tab-btn" data-tab="forum">The Garage</button>
   </div>
 
   <!-- ABOUT TAB -->
@@ -514,6 +592,29 @@
 
       <h2 class="shop-title">Shop upgrades</h2>
       <div id="perk-shop"></div>
+    </div>
+  </div>
+
+  <!-- FORUM TAB -->
+  <div class="tab-panel" id="forum">
+    <p>
+      Pull up a stool. Talk about the skin, the bike, the achievements, the ASCII portrait —
+      whatever's on your mind. Posts are public and can't be edited or deleted once sent.
+    </p>
+
+    <form id="forum-form" class="forum-form">
+      <input type="text" id="forum-name" maxlength="40" placeholder="Name" autocomplete="off" required>
+      <textarea id="forum-message" maxlength="500" rows="3"
+        placeholder="Say something about Roland, Valkyrie, or the skin…" required></textarea>
+      <input type="text" id="forum-hp" name="website" class="hp" autocomplete="off" tabindex="-1">
+      <div class="forum-form-row">
+        <button type="submit" class="game-btn">Post</button>
+        <span class="forum-status" id="forum-status"></span>
+      </div>
+    </form>
+
+    <div class="forum-posts" id="forum-posts">
+      <p class="forum-empty">Loading the chatter…</p>
     </div>
   </div>
 </div>
@@ -837,6 +938,115 @@
   applySkin();
   renderHud();
   renderShop();
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, query, orderBy, limit,
+    onSnapshot, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA8CwEN50kcdyMmbNClMfk52qO9SGtRInw",
+    authDomain: "roland-skin.firebaseapp.com",
+    projectId: "roland-skin",
+    storageBucket: "roland-skin.firebasestorage.app",
+    messagingSenderId: "388462346518",
+    appId: "1:388462346518:web:59e2a48594e11b8193d037"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const postsCol = collection(db, 'posts');
+
+  const postsEl = document.getElementById('forum-posts');
+  const form = document.getElementById('forum-form');
+  const nameInput = document.getElementById('forum-name');
+  const msgInput = document.getElementById('forum-message');
+  const hpInput = document.getElementById('forum-hp');
+  const statusEl = document.getElementById('forum-status');
+
+  function timeAgo(date) {
+    const s = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    const d = Math.floor(h / 24);
+    if (d < 30) return d + 'd ago';
+    return date.toLocaleDateString();
+  }
+
+  function renderPosts(snapshot) {
+    if (snapshot.empty) {
+      postsEl.innerHTML = '<p class="forum-empty">Nobody’s said anything yet. Be the first.</p>';
+      return;
+    }
+    postsEl.innerHTML = '';
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      const post = document.createElement('div');
+      post.className = 'forum-post';
+
+      const head = document.createElement('div');
+      head.className = 'forum-post-head';
+      const name = document.createElement('span');
+      name.className = 'forum-post-name';
+      name.textContent = d.name || 'Anonymous';
+      const time = document.createElement('span');
+      time.className = 'forum-post-time';
+      time.textContent = d.createdAt ? timeAgo(d.createdAt.toDate()) : 'sending…';
+      head.append(name, time);
+
+      const msg = document.createElement('p');
+      msg.className = 'forum-post-msg';
+      msg.textContent = d.message || '';
+
+      post.append(head, msg);
+      postsEl.appendChild(post);
+    });
+  }
+
+  const postsQuery = query(postsCol, orderBy('createdAt', 'desc'), limit(100));
+  onSnapshot(postsQuery, renderPosts, err => {
+    postsEl.innerHTML = '<p class="forum-empty">Couldn’t load the chatter right now.</p>';
+    console.error(err);
+  });
+
+  const POST_COOLDOWN_MS = 15000;
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (hpInput.value) return;   // bot filled the honeypot field
+
+    const last = Number(localStorage.getItem('forumLastPost') || 0);
+    if (Date.now() - last < POST_COOLDOWN_MS) {
+      statusEl.textContent = 'Easy there — wait a few seconds before posting again.';
+      return;
+    }
+
+    const name = nameInput.value.trim().slice(0, 40);
+    const message = msgInput.value.trim().slice(0, 500);
+    if (!name || !message) return;
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    statusEl.textContent = 'Posting…';
+
+    try {
+      await addDoc(postsCol, { name, message, createdAt: serverTimestamp() });
+      localStorage.setItem('forumLastPost', String(Date.now()));
+      msgInput.value = '';
+      statusEl.textContent = '';
+    } catch (err) {
+      statusEl.textContent = 'Couldn’t post — try again.';
+      console.error(err);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
 </script>
 </body>
 </html>
