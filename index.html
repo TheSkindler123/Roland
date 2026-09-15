@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Roland & His Motorcycle</title>
 <style>
   :root {
@@ -149,6 +150,139 @@
     margin-top: 14px;
     font-size: 1em;
   }
+
+  /* Skin Shop game */
+  .game-hud {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    letter-spacing: 0.5px;
+  }
+  .game-hud b {
+    color: var(--accent);
+  }
+  .game-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .hole {
+    position: relative;
+    height: 115px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .person {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(115%);
+    transition: transform 0.18s ease;
+  }
+  .hole.up .person {
+    transform: translateY(0);
+  }
+  .head, .torso {
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 2px dashed rgba(255, 255, 255, 0.45);
+  }
+  .head {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+  .torso {
+    width: 56px;
+    height: 46px;
+    border-radius: 14px 14px 4px 4px;
+    margin-top: 3px;
+  }
+  .eye {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.8);
+  }
+  .person.skinned .head,
+  .person.skinned .torso {
+    background-image: var(--bg-image);
+    background-size: 150px;
+    background-position: center;
+    border-style: solid;
+    border-color: var(--accent);
+  }
+  .person.skinned .eye {
+    background: #1a1a1a;
+  }
+  .person.skinned {
+    animation: pop 0.25s ease;
+  }
+  @keyframes pop {
+    0%   { transform: translateY(0) scale(1); }
+    50%  { transform: translateY(0) scale(1.14); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  .plus {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    color: var(--accent);
+    font-weight: bold;
+    pointer-events: none;
+    animation: floatUp 0.6s ease forwards;
+  }
+  @keyframes floatUp {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to   { opacity: 0; transform: translate(-50%, -20px); }
+  }
+  .game-btn {
+    background: var(--accent);
+    color: #10281c;
+    border: none;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-size: 1.05em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    padding: 11px 26px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+  }
+  .game-btn:hover {
+    filter: brightness(1.12);
+  }
+  .game-msg {
+    min-height: 1.7em;
+    color: var(--accent);
+    font-style: italic;
+    margin-top: 16px;
+  }
+
+  @media (max-width: 560px) {
+    .content-box {
+      padding: 28px 20px 24px;
+    }
+    .content-box h1 {
+      font-size: 1.9em;
+    }
+    .tab-btn {
+      padding: 9px 13px;
+      font-size: 0.95em;
+    }
+  }
 </style>
 </head>
 <body>
@@ -159,6 +293,7 @@
     <button class="tab-btn active" data-tab="about">About Roland</button>
     <button class="tab-btn" data-tab="achievements">Legendary Rides</button>
     <button class="tab-btn" data-tab="ascii">Portrait</button>
+    <button class="tab-btn" data-tab="game">Skin Shop</button>
   </div>
 
   <!-- ABOUT TAB -->
@@ -265,6 +400,26 @@
     </pre>
     <p class="caption">— Roland & Valkyrie, somewhere on the open road —</p>
   </div>
+
+  <!-- GAME TAB -->
+  <div class="tab-panel" id="game">
+    <p>
+      Word got out that Roland keeps the good skin. Now there's a line out the door, and every one of
+      them showed up without any. Click each poor soul before they duck back under — thirty seconds,
+      no refunds.
+    </p>
+
+    <div class="game-hud">
+      <span>Skinned: <b id="score">0</b></span>
+      <span>Time: <b id="time">30</b></span>
+      <span>Best: <b id="best">0</b></span>
+    </div>
+
+    <div class="game-grid" id="grid"></div>
+
+    <button class="game-btn" id="game-btn">Open the shop</button>
+    <p class="game-msg" id="game-msg"></p>
+  </div>
 </div>
 
 <script>
@@ -277,8 +432,138 @@
       panels.forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab !== 'game') {
+        stopGame();
+        gameBtn.textContent = 'Open the shop';
+        msgEl.textContent = '';
+      }
     });
   });
+
+  /* Skin Shop */
+  const grid = document.getElementById('grid');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const bestEl = document.getElementById('best');
+  const msgEl = document.getElementById('game-msg');
+  const gameBtn = document.getElementById('game-btn');
+
+  const HOLES = 9;
+  const ROUND_SECONDS = 30;
+  const holes = [];
+  const duckTimers = new Map();
+  let score = 0;
+  let timeLeft = ROUND_SECONDS;
+  let running = false;
+  let tickId = null;
+  let spawnId = null;
+  let best = 0;
+
+  for (let i = 0; i < HOLES; i++) {
+    const hole = document.createElement('div');
+    hole.className = 'hole';
+    hole.innerHTML =
+      '<div class="person">' +
+        '<div class="head"><span class="eye"></span><span class="eye"></span></div>' +
+        '<div class="torso"></div>' +
+      '</div>';
+    hole.addEventListener('click', () => skin(hole));
+    grid.appendChild(hole);
+    holes.push(hole);
+  }
+
+  try {
+    best = parseInt(localStorage.getItem('skinShopBest'), 10) || 0;
+  } catch (e) {}
+  bestEl.textContent = best;
+
+  function popUp() {
+    const idle = holes.filter(h => !h.classList.contains('up'));
+    if (!idle.length) return;
+    const hole = idle[Math.floor(Math.random() * idle.length)];
+    hole.classList.add('up');
+    duckTimers.set(hole, setTimeout(() => duck(hole), 900 + Math.random() * 900));
+  }
+
+  function duck(hole) {
+    hole.classList.remove('up');
+    clearTimeout(duckTimers.get(hole));
+    duckTimers.set(hole, setTimeout(() => {
+      if (!hole.classList.contains('up')) {
+        hole.querySelector('.person').classList.remove('skinned');
+      }
+    }, 250));
+  }
+
+  function skin(hole) {
+    const person = hole.querySelector('.person');
+    if (!running || !hole.classList.contains('up') || person.classList.contains('skinned')) return;
+
+    person.classList.add('skinned');
+    score++;
+    scoreEl.textContent = score;
+
+    const plus = document.createElement('span');
+    plus.className = 'plus';
+    plus.textContent = '+1';
+    hole.appendChild(plus);
+    setTimeout(() => plus.remove(), 600);
+
+    clearTimeout(duckTimers.get(hole));
+    duckTimers.set(hole, setTimeout(() => duck(hole), 400));
+  }
+
+  function scheduleSpawn() {
+    const delay = Math.max(280, 750 - (ROUND_SECONDS - timeLeft) * 14);
+    spawnId = setTimeout(() => {
+      popUp();
+      if (running) scheduleSpawn();
+    }, delay);
+  }
+
+  function stopGame() {
+    running = false;
+    clearInterval(tickId);
+    clearTimeout(spawnId);
+    duckTimers.forEach(t => clearTimeout(t));
+    duckTimers.clear();
+    holes.forEach(h => {
+      h.classList.remove('up');
+      h.querySelector('.person').classList.remove('skinned');
+    });
+  }
+
+  function endGame() {
+    stopGame();
+    gameBtn.textContent = 'Play again';
+    if (score > best) {
+      best = score;
+      bestEl.textContent = best;
+      try { localStorage.setItem('skinShopBest', String(best)); } catch (e) {}
+      msgEl.textContent = 'New shop record — ' + score + ' fully skinned. Roland would be proud.';
+    } else {
+      msgEl.textContent = 'Time! You skinned ' + score + '. The rest went home bare.';
+    }
+  }
+
+  function startGame() {
+    stopGame();
+    score = 0;
+    timeLeft = ROUND_SECONDS;
+    scoreEl.textContent = '0';
+    timeEl.textContent = timeLeft;
+    msgEl.textContent = '';
+    gameBtn.textContent = 'Restart';
+    running = true;
+    tickId = setInterval(() => {
+      timeLeft--;
+      timeEl.textContent = timeLeft;
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+    scheduleSpawn();
+  }
+
+  gameBtn.addEventListener('click', startGame);
 </script>
 </body>
 </html>
