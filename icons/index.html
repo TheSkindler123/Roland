@@ -347,16 +347,8 @@
         <input type="range" id="radius" min="0" max="50" value="22">
       </div>
 
-      <div class="ctrl">
-        <label>Top highlight <b id="glossamt-v">100%</b></label>
-        <input type="range" id="glossamt" min="0" max="250" value="100">
-      </div>
-
       <label class="toggle">
         <input type="checkbox" id="trim" checked> Trim transparent edges first
-      </label>
-      <label class="toggle">
-        <input type="checkbox" id="shadow" checked> Drop shadow
       </label>
 
       <button class="btn" id="icns" disabled>Download .icns</button>
@@ -400,9 +392,7 @@ const state = {
   scale: 100,
   margin: MACOS_MARGIN,
   radius: 22,
-  trim: true,
-  shadow: true,
-  glossAmt: 100
+  trim: true
 };
 
 const $ = id => document.getElementById(id);
@@ -595,8 +585,8 @@ function render(canvas, size) {
   const margin = size * (state.margin / 100);
   const body = size - margin * 2;
 
-  // Build the icon on its own canvas, clipped to the shape, so nothing can
-  // spill past the silhouette and the shadow traces the real outline.
+  // Build the icon on its own canvas, clipped to the shape, so artwork can
+  // never spill past the silhouette.
   const off = document.createElement('canvas');
   off.width = off.height = size;
   const o = off.getContext('2d');
@@ -627,61 +617,9 @@ function render(canvas, size) {
   o.imageSmoothingQuality = 'high';
   o.drawImage(art, (size - w) / 2, (size - h) / 2, w, h);
 
-  // Calibrated against real macOS icons: the system gloss is far subtler than
-  // it looks. Messages measures ~1 luminance step from top edge to body, so
-  // these stay low deliberately — a sheen, not a chrome strip.
-  if (state.glossAmt > 0) {
-    const a = state.glossAmt / 100;
-    o.globalCompositeOperation = 'source-atop';   // never paints empty space
-
-    const sheen = o.createLinearGradient(0, margin, 0, margin + body * 0.5);
-    sheen.addColorStop(0, 'rgba(255, 255, 255, ' + (0.05 * a) + ')');
-    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    o.fillStyle = sheen;
-    o.fillRect(margin, margin, body, body * 0.5);
-
-    const shade = o.createLinearGradient(0, margin + body * 0.55, 0, margin + body);
-    shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    shade.addColorStop(1, 'rgba(0, 0, 0, ' + (0.09 * a) + ')');
-    o.fillStyle = shade;
-    o.fillRect(margin, margin + body * 0.55, body, body * 0.45);
-
-    // Specular rim: brightest across the flat run of the top edge, fading out
-    // as the shape turns into the corners. The band clip keeps it off the
-    // bottom; the horizontal ramp keeps it off the sides.
-    o.save();
-    o.beginPath();
-    o.rect(margin, margin, body, body * 0.4);
-    o.clip();
-
-    const rim = o.createLinearGradient(margin, 0, margin + body, 0);
-    const peak = 0.62 * a, shoulder = 0.18 * a;
-    rim.addColorStop(0.00, 'rgba(255, 255, 255, 0)');
-    rim.addColorStop(0.17, 'rgba(255, 255, 255, ' + shoulder + ')');
-    rim.addColorStop(0.31, 'rgba(255, 255, 255, ' + peak + ')');
-    rim.addColorStop(0.50, 'rgba(255, 255, 255, ' + peak + ')');
-    rim.addColorStop(0.69, 'rgba(255, 255, 255, ' + peak + ')');
-    rim.addColorStop(0.83, 'rgba(255, 255, 255, ' + shoulder + ')');
-    rim.addColorStop(1.00, 'rgba(255, 255, 255, 0)');
-    o.strokeStyle = rim;
-    o.lineWidth = size * 0.007;
-    bodyPath(o, margin, margin, body);
-    o.stroke();
-    o.restore();
-
-    o.globalCompositeOperation = 'source-over';
-  }
-
   o.restore();
 
-  ctx.save();
-  if (state.shadow) {
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-    ctx.shadowBlur = size * 0.055;
-    ctx.shadowOffsetY = size * 0.026;
-  }
   ctx.drawImage(off, 0, 0);
-  ctx.restore();
 }
 
 function renderAll() {
@@ -796,13 +734,7 @@ function setSlider(id, key, value, suffix) {
 
 $('c1').addEventListener('input', e => { state.c1 = e.target.value; renderAll(); });
 $('c2').addEventListener('input', e => { state.c2 = e.target.value; renderAll(); });
-$('shadow').addEventListener('change', e => { state.shadow = e.target.checked; renderAll(); });
 $('trim').addEventListener('change', e => { state.trim = e.target.checked; refresh(); });
-$('glossamt').addEventListener('input', e => {
-  state.glossAmt = Number(e.target.value);
-  $('glossamt-v').textContent = e.target.value + '%';
-  renderAll();
-});
 
 $('r1').addEventListener('input', e => { state.r1 = e.target.value; refresh(); });
 $('r2').addEventListener('input', e => { state.r2 = e.target.value; refresh(); });
@@ -815,13 +747,10 @@ $('strength').addEventListener('input', e => {
 $('macos').addEventListener('click', () => {
   state.shape = 'squircle';
   state.fit = 'fill';
-  state.shadow = true;
   setSegment('shape', 'squircle');
   setSegment('fit', 'fill');
   setSlider('scale', 'scale', 100, '%');
   setSlider('margin', 'margin', MACOS_MARGIN, '%');
-  setSlider('glossamt', 'glossAmt', 100, '%');
-  $('shadow').checked = true;
   syncVisibility();
   renderAll();
   statusEl.textContent = 'Set to macOS proportions.';
