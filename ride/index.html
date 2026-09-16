@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ride with Valkyrie</title>
+<style>
+  :root { --accent: #3fae74; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #060a08;
+    font-family: 'Trebuchet MS', sans-serif;
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+    touch-action: none;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .back-link {
+    position: fixed;
+    top: 14px;
+    left: 16px;
+    color: rgba(245, 242, 234, 0.85);
+    background: rgba(10, 20, 15, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    text-decoration: none;
+    font-size: 0.85em;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+    padding: 7px 12px;
+    border-radius: 20px;
+    z-index: 5;
+  }
+  .back-link:hover { border-color: var(--accent); color: var(--accent); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: rgba(6, 10, 8, 0.78);
+    backdrop-filter: blur(2px);
+    padding: 24px;
+    z-index: 4;
+    color: #f5f2ea;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h1 {
+    margin: 0 0 6px;
+    font-size: 2em;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+  }
+  .overlay h2 {
+    margin: 0 0 10px;
+    font-size: 1.5em;
+    color: var(--accent);
+  }
+  .overlay p {
+    margin: 0 0 22px;
+    max-width: 460px;
+    line-height: 1.55;
+    opacity: 0.9;
+  }
+  .go-btn {
+    background: var(--accent);
+    color: #0d1613;
+    border: none;
+    font-family: 'Trebuchet MS', sans-serif;
+    font-weight: bold;
+    font-size: 1.15em;
+    letter-spacing: 0.4px;
+    padding: 14px 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+  }
+  .go-btn:hover { filter: brightness(1.12); }
+  .controls-hint {
+    margin-top: 20px;
+    font-size: 0.85em;
+    opacity: 0.6;
+  }
+
+  .touch-controls {
+    position: fixed;
+    bottom: 18px;
+    left: 0;
+    right: 0;
+    display: none;
+    justify-content: space-between;
+    padding: 0 18px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .touch-cluster {
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+  }
+  .touch-cluster.right { flex-direction: column; }
+  .touch-btn {
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background: rgba(20, 20, 20, 0.45);
+    color: #fff;
+    font-size: 1.5em;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .touch-btn:active { background: rgba(63, 174, 116, 0.55); }
+  @media (pointer: coarse) {
+    .touch-controls { display: flex; }
+  }
+</style>
+</head>
+<body>
+<a class="back-link" href="../index.html">&larr; Roland</a>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div class="overlay" id="start-overlay">
+  <h1>Ride with Valkyrie</h1>
+  <h2>Merge onto the highway</h2>
+  <p>
+    Everyone ahead of you is doing the speed limit. Roland never has. Steer around slower traffic,
+    gas it for distance, brake when a gap closes faster than you can handle.
+  </p>
+  <button class="go-btn" id="start-btn">Start Engine</button>
+  <p class="controls-hint">Steer &larr; &rarr; / A D &nbsp;&middot;&nbsp; Gas &uarr; / W &nbsp;&middot;&nbsp; Brake &darr; / S</p>
+</div>
+
+<div class="overlay" id="crash-overlay" hidden>
+  <h2>Wiped out</h2>
+  <p id="crash-text"></p>
+  <button class="go-btn" id="retry-btn">Try Again</button>
+</div>
+
+<div class="touch-controls">
+  <div class="touch-cluster left">
+    <div class="touch-btn" id="btn-left">&#9664;</div>
+    <div class="touch-btn" id="btn-right">&#9654;</div>
+  </div>
+  <div class="touch-cluster right">
+    <div class="touch-btn" id="btn-gas">&#9650;</div>
+    <div class="touch-btn" id="btn-brake">&#9660;</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const startOverlay = document.getElementById('start-overlay');
+  const crashOverlay = document.getElementById('crash-overlay');
+  const crashText = document.getElementById('crash-text');
+
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('valkyrieBestDistance'), 10) || 0; } catch (e) {}
+
+  /* ---------- canvas sizing ---------- */
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = rect.width; H = rect.height;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ---------- road / perspective ---------- */
+  const HORIZON_FRAC = 0.36;
+  const NEAR_K = 200;
+  const FAR_Z = 3200;
+  const LANES = [-0.55, 0, 0.55];
+
+  function horizonY() { return H * HORIZON_FRAC; }
+  function roadNearHalf() { return W * 0.5; }
+  function roadFarHalf() { return W * 0.02; }
+  function perspective(z) { return NEAR_K / (NEAR_K + Math.max(0, z)); }
+  function screenYFor(p) { return horizonY() + p * (H - horizonY()); }
+  function roadHalfAt(p) { return roadFarHalf() + p * (roadNearHalf() - roadFarHalf()); }
+  function screenXFor(laneX, p) { return W / 2 + laneX * roadHalfAt(p); }
+
+  /* ---------- tuning ---------- */
+  const CRUISE_MIN = 320, CRUISE_MAX = 1500;
+  const AUTO_RAMP = 9;
+  const GAS_ACCEL = 640;
+  const BRAKE_DECEL = 950;
+  const STEER_RATE = 2.8;
+  const LANE_LIMIT = 0.92;
+  const HIT_LANE_RADIUS = 0.24;
+  const HIT_Z = 38;
+  const NUM_CARS = 7;
+  const SHAKE_DURATION = 0.5;
+  const CAR_COLORS = ['#c1443b', '#3d6fbf', '#d4a936', '#8a8f98', '#4a8f5a'];
+
+  function randRange(a, b) { return a + Math.random() * (b - a); }
+  function randLane() { return LANES[Math.floor(Math.random() * LANES.length)]; }
+
+  function freshCar(speed, farSpawn) {
+    return {
+      z: farSpawn ? randRange(500, FAR_Z) : randRange(FAR_Z * 0.65, FAR_Z),
+      lane: randLane(),
+      speed: speed * randRange(0.3, 0.68),
+      color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)]
+    };
+  }
+
+  function freshState() {
+    const speed = CRUISE_MIN;
+    return {
+      running: false,
+      crashed: false,
+      laneX: 0,
+      speed,
+      dist: 0,
+      roadOffset: 0,
+      shakeT: 0,
+      flashA: 0,
+      cars: Array.from({ length: NUM_CARS }, () => freshCar(speed, true))
+    };
+  }
+  let state = freshState();
+  const input = { left: false, right: false, gas: false, brake: false };
+
+  function step(dt) {
+    if (state.shakeT > 0) {
+      state.shakeT = Math.max(0, state.shakeT - dt);
+      state.flashA = state.shakeT / SHAKE_DURATION;
+      if (state.shakeT === 0) revealCrash();
+    }
+    if (!state.running || state.crashed) return;
+
+    state.speed += AUTO_RAMP * dt;
+    if (input.gas) state.speed += GAS_ACCEL * dt;
+    if (input.brake) state.speed -= BRAKE_DECEL * dt;
+    state.speed = Math.max(CRUISE_MIN, Math.min(CRUISE_MAX, state.speed));
+
+    const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    state.laneX += steer * STEER_RATE * dt;
+    state.laneX = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, state.laneX));
+
+    state.dist += state.speed * dt / 12;
+    state.roadOffset += state.speed * dt;
+
+    for (const car of state.cars) {
+      car.z -= (state.speed - car.speed) * dt;
+
+      if (car.z < HIT_Z && car.z > -HIT_Z &&
+          Math.abs(car.lane - state.laneX) < HIT_LANE_RADIUS) {
+        crash();
+        return;
+      }
+      if (car.z < -80) Object.assign(car, freshCar(state.speed, false));
+    }
+  }
+
+  function crash() {
+    state.crashed = true;
+    state.running = false;
+    state.shakeT = SHAKE_DURATION;
+    state.flashA = 1;
+    const d = Math.round(state.dist);
+    let record = false;
+    if (d > best) { best = d; record = true; try { localStorage.setItem('valkyrieBestDistance', String(best)); } catch (e) {} }
+    crashText.textContent = 'Rear-ended a straggler at ' + Math.round(state.speed) + ' units. ' +
+      'You made it ' + d + ' meters' + (record && d > 0 ? ' — new best.' : '.');
+  }
+  function revealCrash() { crashOverlay.hidden = false; }
+
+  /* ---------- rendering ---------- */
+  function drawRoad() {
+    const hy = horizonY();
+    ctx.fillStyle = '#0d1f16';
+    ctx.fillRect(0, 0, W, hy);
+    ctx.fillStyle = '#141f18';
+    ctx.fillRect(0, hy, W, H - hy);
+
+    const nearHalf = roadHalfAt(1), farHalf = roadHalfAt(0);
+    ctx.fillStyle = '#25282b';
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - farHalf, hy);
+    ctx.lineTo(W / 2 + farHalf, hy);
+    ctx.lineTo(W / 2 + nearHalf, H);
+    ctx.lineTo(W / 2 - nearHalf, H);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#3fae74';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - farHalf, hy); ctx.lineTo(W / 2 - nearHalf, H);
+    ctx.moveTo(W / 2 + farHalf, hy); ctx.lineTo(W / 2 + nearHalf, H);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    const dashSpacing = 240, dashLen = 50;
+    const dashCount = Math.ceil(FAR_Z / dashSpacing) + 2;
+    for (let i = 0; i < dashCount; i++) {
+      let z = i * dashSpacing - (state.roadOffset % dashSpacing);
+      if (z < 0 || z > FAR_Z) continue;
+      const p0 = perspective(z), p1 = perspective(z + dashLen);
+      const y0 = screenYFor(p0), y1 = screenYFor(p1);
+      [-0.33, 0.33].forEach(laneLine => {
+        ctx.lineWidth = 1 + p0 * 3;
+        ctx.beginPath();
+        ctx.moveTo(screenXFor(laneLine, p0), y0);
+        ctx.lineTo(screenXFor(laneLine, p1), y1);
+        ctx.stroke();
+      });
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawCar(car) {
+    if (car.z <= 0 || car.z > FAR_Z) return;
+    const p = perspective(car.z);
+    const cx = screenXFor(car.lane, p);
+    const cy = screenYFor(p);
+    const w = 24 + p * 170;
+    const h = w * 0.62;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + h * 0.42, w * 0.5, h * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const r = Math.min(10, w * 0.12);
+    roundRect(cx - w / 2, cy - h, w, h, r);
+    ctx.fillStyle = car.color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = Math.max(1, p * 3);
+    ctx.stroke();
+
+    roundRect(cx - w * 0.32, cy - h * 0.92, w * 0.64, h * 0.34, r * 0.5);
+    ctx.fillStyle = 'rgba(15,20,18,0.75)';
+    ctx.fill();
+
+    ctx.fillStyle = '#ff4d4d';
+    const lw = w * 0.14, lh = h * 0.14;
+    ctx.fillRect(cx - w / 2 + w * 0.05, cy - lh * 1.4, lw, lh);
+    ctx.fillRect(cx + w / 2 - w * 0.05 - lw, cy - lh * 1.4, lw, lh);
+  }
+
+  function drawBike() {
+    const cx = screenXFor(state.laneX, 1);
+    const baseY = H;
+    ctx.fillStyle = '#0f1613';
+    ctx.beginPath();
+    ctx.moveTo(cx - 100, baseY);
+    ctx.lineTo(cx - 64, baseY - 50);
+    ctx.lineTo(cx - 18, baseY - 32);
+    ctx.lineTo(cx, baseY - 44);
+    ctx.lineTo(cx + 18, baseY - 32);
+    ctx.lineTo(cx + 64, baseY - 50);
+    ctx.lineTo(cx + 100, baseY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#1c1c1c';
+    ctx.beginPath(); ctx.ellipse(cx - 70, baseY - 22, 17, 10, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 70, baseY - 22, 17, 10, 0.3, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(63,174,116,0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, baseY - 22, 42, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+  }
+
+  function drawHud() {
+    ctx.textBaseline = 'top';
+    const hudTop = 56;
+    ctx.font = 'bold 22px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillText('DISTANCE  ' + Math.round(state.dist) + ' m', 21, hudTop + 1);
+    ctx.fillStyle = '#f5f2ea';
+    ctx.fillText('DISTANCE  ' + Math.round(state.dist) + ' m', 20, hudTop);
+
+    ctx.font = 'bold 15px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillText('BEST  ' + best + ' m', 21, hudTop + 31);
+    ctx.fillStyle = '#3fae74';
+    ctx.fillText('BEST  ' + best + ' m', 20, hudTop + 30);
+
+    // speedometer, top right
+    const label = Math.round(state.speed);
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 28px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillText(label, W - 19, 21);
+    ctx.fillStyle = '#f5f2ea';
+    ctx.fillText(label, W - 20, 20);
+    ctx.font = 'bold 12px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(245,242,234,0.6)';
+    ctx.fillText('SPEED', W - 20, 50);
+    ctx.textAlign = 'left';
+  }
+
+  function render() {
+    ctx.save();
+    if (state.shakeT > 0) {
+      const mag = 14 * (state.shakeT / SHAKE_DURATION);
+      ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
+    }
+
+    ctx.clearRect(-20, -20, W + 40, H + 40);
+    drawRoad();
+    [...state.cars].sort((a, b) => b.z - a.z).forEach(drawCar);
+    drawBike();
+
+    const speedT = (state.speed - CRUISE_MIN) / (CRUISE_MAX - CRUISE_MIN);
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.12 * speedT) + ')';
+    ctx.fillRect(0, 0, W, horizonY());
+
+    if (state.flashA > 0) {
+      ctx.fillStyle = 'rgba(200,30,20,' + (0.5 * state.flashA) + ')';
+      ctx.fillRect(-20, -20, W + 40, H + 40);
+    }
+
+    drawHud();
+    ctx.restore();
+  }
+
+  /* ---------- loop ---------- */
+  let last = 0, rafId = null;
+  function loop(now) {
+    if (!last) last = now;
+    const dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+    step(dt);
+    render();
+    rafId = requestAnimationFrame(loop);
+  }
+  function startLoop() { if (!rafId) { last = 0; rafId = requestAnimationFrame(loop); } }
+  function stopLoop() { if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopLoop(); else if (state.running || state.shakeT > 0) startLoop();
+  });
+
+  /* ---------- input ---------- */
+  const KEYS = {
+    ArrowRight: 'right', d: 'right', D: 'right',
+    ArrowLeft: 'left', a: 'left', A: 'left',
+    ArrowUp: 'gas', w: 'gas', W: 'gas',
+    ArrowDown: 'brake', s: 'brake', S: 'brake'
+  };
+  window.addEventListener('keydown', e => { if (KEYS[e.key]) input[KEYS[e.key]] = true; });
+  window.addEventListener('keyup', e => { if (KEYS[e.key]) input[KEYS[e.key]] = false; });
+
+  function bindHold(el, key) {
+    el.addEventListener('pointerdown', e => { e.preventDefault(); input[key] = true; });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, () => input[key] = false));
+  }
+  bindHold(document.getElementById('btn-left'), 'left');
+  bindHold(document.getElementById('btn-right'), 'right');
+  bindHold(document.getElementById('btn-gas'), 'gas');
+  bindHold(document.getElementById('btn-brake'), 'brake');
+
+  function begin() {
+    state = freshState();
+    state.running = true;
+    startOverlay.hidden = true;
+    crashOverlay.hidden = true;
+    startLoop();
+  }
+  document.getElementById('start-btn').addEventListener('click', begin);
+  document.getElementById('retry-btn').addEventListener('click', begin);
+
+  render();
+})();
+</script>
+</body>
+</html>
