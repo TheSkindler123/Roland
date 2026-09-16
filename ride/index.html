@@ -143,8 +143,10 @@
   <h1>Ride with Valkyrie</h1>
   <h2>Merge onto the highway</h2>
   <p>
-    Everyone ahead of you is doing the speed limit. Roland never has. Steer around slower traffic,
-    gas it for distance, brake when a gap closes faster than you can handle.
+    Everyone ahead of you is doing the speed limit. Roland never has. Steer around slower traffic
+    on the twisting highway, gas it for distance, brake when a gap closes faster than you can
+    handle. Grab the glowing pickups &mdash; a bolt means nitro, a shield means you can plow
+    straight through traffic for a few seconds.
   </p>
   <button class="go-btn" id="start-btn">Start Engine</button>
   <p class="controls-hint">Steer &larr; &rarr; / A D &nbsp;&middot;&nbsp; Gas &uarr; / W &nbsp;&middot;&nbsp; Brake &darr; / S</p>
@@ -195,7 +197,7 @@
   /* ---------- road / perspective ---------- */
   const HORIZON_FRAC = 0.36;
   const NEAR_K = 200;
-  const FAR_Z = 3200;
+  const FAR_Z = 4400;
   const LANES = [-0.55, 0, 0.55];
 
   function horizonY() { return H * HORIZON_FRAC; }
@@ -204,7 +206,22 @@
   function perspective(z) { return NEAR_K / (NEAR_K + Math.max(0, z)); }
   function screenYFor(p) { return horizonY() + p * (H - horizonY()); }
   function roadHalfAt(p) { return roadFarHalf() + p * (roadNearHalf() - roadFarHalf()); }
-  function screenXFor(laneX, p) { return W / 2 + laneX * roadHalfAt(p); }
+
+  // Pure function of absolute world distance: a smooth, deterministic S-curve
+  // path for the road to follow. No integration/state needed to evaluate it
+  // at any point, which keeps every renderer call (cars, dashes, edges) trivial.
+  function curveOffset(worldZ) {
+    return Math.sin(worldZ / 1100) * 360 + Math.sin(worldZ / 2600 + 1.4) * 560;
+  }
+  // Lateral screen shift for something `relZ` ahead of the camera, caused by
+  // the road bending between here and there. Zero at relZ=0 by construction,
+  // so the player is always drawn sitting correctly on "their" point of road.
+  function curveScreenShift(relZ, p) {
+    return (curveOffset(state.travel + relZ) - curveOffset(state.travel)) * p * 0.55;
+  }
+  function screenXFor(laneX, relZ, p) {
+    return W / 2 + curveScreenShift(relZ, p) + laneX * roadHalfAt(p);
+  }
 
   /* ---------- tuning ---------- */
   const CRUISE_MIN = 320, CRUISE_MAX = 1500;
@@ -219,6 +236,14 @@
   const SHAKE_DURATION = 0.5;
   const CAR_COLORS = ['#c1443b', '#3d6fbf', '#d4a936', '#8a8f98', '#4a8f5a'];
 
+  const NUM_PICKUPS = 3;
+  const PICKUP_TYPES = ['nitro', 'shield'];
+  const PICKUP_HIT_Z = 46;
+  const PICKUP_HIT_RADIUS = 0.30;
+  const NITRO_DURATION = 4;
+  const NITRO_SPEED = 1900, NITRO_MAX = 2200, NITRO_ACCEL = 900;
+  const SHIELD_DURATION = 5;
+
   function randRange(a, b) { return a + Math.random() * (b - a); }
   function randLane() { return LANES[Math.floor(Math.random() * LANES.length)]; }
 
@@ -231,6 +256,14 @@
     };
   }
 
+  function freshPickup(farSpawn) {
+    return {
+      z: farSpawn ? randRange(900, FAR_Z) : randRange(FAR_Z * 0.6, FAR_Z),
+      lane: randLane(),
+      type: PICKUP_TYPES[Math.floor(Math.random() * PICKUP_TYPES.length)]
+    };
+  }
+
   function freshState() {
     const speed = CRUISE_MIN;
     return {
@@ -239,10 +272,14 @@
       laneX: 0,
       speed,
       dist: 0,
+      travel: 0,
       roadOffset: 0,
       shakeT: 0,
       flashA: 0,
-      cars: Array.from({ length: NUM_CARS }, () => freshCar(speed, true))
+      nitroT: 0,
+      shieldT: 0,
+      cars: Array.from({ length: NUM_CARS }, () => freshCar(speed, true)),
+      pickups: Array.from({ length: NUM_PICKUPS }, () => freshPickup(true))
     };
   }
   let state = freshState();
@@ -256,16 +293,24 @@
     }
     if (!state.running || state.crashed) return;
 
+    if (state.nitroT > 0) {
+      state.nitroT = Math.max(0, state.nitroT - dt);
+      state.speed = Math.max(state.speed, NITRO_SPEED) + NITRO_ACCEL * dt;
+    }
+    if (state.shieldT > 0) state.shieldT = Math.max(0, state.shieldT - dt);
+
+    const speedCap = state.nitroT > 0 ? NITRO_MAX : CRUISE_MAX;
     state.speed += AUTO_RAMP * dt;
     if (input.gas) state.speed += GAS_ACCEL * dt;
     if (input.brake) state.speed -= BRAKE_DECEL * dt;
-    state.speed = Math.max(CRUISE_MIN, Math.min(CRUISE_MAX, state.speed));
+    state.speed = Math.max(CRUISE_MIN, Math.min(speedCap, state.speed));
 
     const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     state.laneX += steer * STEER_RATE * dt;
     state.laneX = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, state.laneX));
 
     state.dist += state.speed * dt / 12;
+    state.travel += state.speed * dt;
     state.roadOffset += state.speed * dt;
 
     for (const car of state.cars) {
@@ -273,11 +318,32 @@
 
       if (car.z < HIT_Z && car.z > -HIT_Z &&
           Math.abs(car.lane - state.laneX) < HIT_LANE_RADIUS) {
-        crash();
-        return;
+        if (state.shieldT > 0) {
+          Object.assign(car, freshCar(state.speed, false));
+        } else {
+          crash();
+          return;
+        }
       }
       if (car.z < -80) Object.assign(car, freshCar(state.speed, false));
     }
+
+    for (const p of state.pickups) {
+      p.z -= state.speed * dt;
+
+      if (p.z < PICKUP_HIT_Z && p.z > -PICKUP_HIT_Z &&
+          Math.abs(p.lane - state.laneX) < PICKUP_HIT_RADIUS) {
+        collectPickup(p);
+        continue;
+      }
+      if (p.z < -80) Object.assign(p, freshPickup(false));
+    }
+  }
+
+  function collectPickup(p) {
+    if (p.type === 'nitro') state.nitroT = NITRO_DURATION;
+    else if (p.type === 'shield') state.shieldT = SHIELD_DURATION;
+    Object.assign(p, freshPickup(false));
   }
 
   function crash() {
@@ -294,6 +360,8 @@
   function revealCrash() { crashOverlay.hidden = false; }
 
   /* ---------- rendering ---------- */
+  const ROAD_STEPS = 56;
+
   function drawRoad() {
     const hy = horizonY();
     ctx.fillStyle = '#0d1f16';
@@ -301,21 +369,31 @@
     ctx.fillStyle = '#141f18';
     ctx.fillRect(0, hy, W, H - hy);
 
-    const nearHalf = roadHalfAt(1), farHalf = roadHalfAt(0);
+    // build the road as a curved ribbon: walk out to the horizon along the
+    // right edge, then back along the left edge, following curveScreenShift
+    const rightEdge = [], leftEdge = [];
+    for (let i = 0; i <= ROAD_STEPS; i++) {
+      const z = FAR_Z * (i / ROAD_STEPS) ** 1.6;   // denser sampling near the camera
+      const p = perspective(z), y = screenYFor(p);
+      rightEdge.push([screenXFor(1, z, p), y]);
+      leftEdge.push([screenXFor(-1, z, p), y]);
+    }
+
     ctx.fillStyle = '#25282b';
     ctx.beginPath();
-    ctx.moveTo(W / 2 - farHalf, hy);
-    ctx.lineTo(W / 2 + farHalf, hy);
-    ctx.lineTo(W / 2 + nearHalf, H);
-    ctx.lineTo(W / 2 - nearHalf, H);
+    ctx.moveTo(rightEdge[0][0], rightEdge[0][1]);
+    for (const [x, y] of rightEdge) ctx.lineTo(x, y);
+    for (let i = leftEdge.length - 1; i >= 0; i--) ctx.lineTo(leftEdge[i][0], leftEdge[i][1]);
     ctx.closePath();
     ctx.fill();
 
     ctx.strokeStyle = '#3fae74';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(W / 2 - farHalf, hy); ctx.lineTo(W / 2 - nearHalf, H);
-    ctx.moveTo(W / 2 + farHalf, hy); ctx.lineTo(W / 2 + nearHalf, H);
+    rightEdge.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.stroke();
+    ctx.beginPath();
+    leftEdge.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
     ctx.stroke();
 
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
@@ -329,8 +407,8 @@
       [-0.33, 0.33].forEach(laneLine => {
         ctx.lineWidth = 1 + p0 * 3;
         ctx.beginPath();
-        ctx.moveTo(screenXFor(laneLine, p0), y0);
-        ctx.lineTo(screenXFor(laneLine, p1), y1);
+        ctx.moveTo(screenXFor(laneLine, z, p0), y0);
+        ctx.lineTo(screenXFor(laneLine, z + dashLen, p1), y1);
         ctx.stroke();
       });
     }
@@ -349,7 +427,7 @@
   function drawCar(car) {
     if (car.z <= 0 || car.z > FAR_Z) return;
     const p = perspective(car.z);
-    const cx = screenXFor(car.lane, p);
+    const cx = screenXFor(car.lane, car.z, p);
     const cy = screenYFor(p);
     const w = 24 + p * 170;
     const h = w * 0.62;
@@ -378,29 +456,88 @@
   }
 
   function drawBike() {
-    const cx = screenXFor(state.laneX, 1);
+    const cx = screenXFor(state.laneX, 0, 1);
     const baseY = H;
+    const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const lean = steer * 14;   // handlebar/shoulder shift for a bit of steering feedback
+
+    ctx.save();
+    if (state.shieldT > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 120);
+      ctx.strokeStyle = 'rgba(80, 210, 255, ' + (0.35 + 0.25 * pulse) + ')';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(cx, baseY - 26, 96, Math.PI * 1.08, Math.PI * 1.92);
+      ctx.stroke();
+    }
+
     ctx.fillStyle = '#0f1613';
     ctx.beginPath();
     ctx.moveTo(cx - 100, baseY);
-    ctx.lineTo(cx - 64, baseY - 50);
-    ctx.lineTo(cx - 18, baseY - 32);
-    ctx.lineTo(cx, baseY - 44);
-    ctx.lineTo(cx + 18, baseY - 32);
-    ctx.lineTo(cx + 64, baseY - 50);
+    ctx.lineTo(cx - 64 + lean, baseY - 50);
+    ctx.lineTo(cx - 18 + lean * 0.5, baseY - 32);
+    ctx.lineTo(cx + lean * 0.3, baseY - 44);
+    ctx.lineTo(cx + 18 + lean * 0.5, baseY - 32);
+    ctx.lineTo(cx + 64 + lean, baseY - 50);
     ctx.lineTo(cx + 100, baseY);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = '#1c1c1c';
-    ctx.beginPath(); ctx.ellipse(cx - 70, baseY - 22, 17, 10, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 70, baseY - 22, 17, 10, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx - 70 + lean, baseY - 22, 17, 10, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 70 + lean, baseY - 22, 17, 10, 0.3, 0, Math.PI * 2); ctx.fill();
 
-    ctx.strokeStyle = 'rgba(63,174,116,0.5)';
+    ctx.strokeStyle = state.nitroT > 0 ? 'rgba(255,170,60,0.75)' : 'rgba(63,174,116,0.5)';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(cx, baseY - 22, 42, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(cx + lean * 0.3, baseY - 22, 42, Math.PI * 1.15, Math.PI * 1.85);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPickup(p) {
+    if (p.z <= 0 || p.z > FAR_Z) return;
+    const per = perspective(p.z);
+    const cx = screenXFor(p.lane, p.z, per);
+    const cy = screenYFor(per) - (18 + per * 30);
+    const r = 8 + per * 22;
+    const bob = Math.sin(performance.now() / 260 + p.lane * 5) * r * 0.15;
+    const color = p.type === 'nitro' ? '#ffb545' : '#59c9ff';
+
+    ctx.save();
+    ctx.translate(cx, cy + bob);
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
+    glow.addColorStop(0, color + 'aa');
+    glow.addColorStop(1, color + '00');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = Math.max(1, per * 2.5);
+    ctx.stroke();
+
+    ctx.fillStyle = '#0d1613';
+    if (p.type === 'nitro') {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.15, -r * 0.6); ctx.lineTo(r * 0.35, -r * 0.1);
+      ctx.lineTo(r * 0.05, -r * 0.1); ctx.lineTo(r * 0.15, r * 0.6);
+      ctx.lineTo(-r * 0.35, r * 0.05); ctx.lineTo(-r * 0.05, r * 0.05);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.65);
+      ctx.lineTo(r * 0.55, -r * 0.3);
+      ctx.lineTo(r * 0.55, r * 0.2);
+      ctx.lineTo(0, r * 0.65);
+      ctx.lineTo(-r * 0.55, r * 0.2);
+      ctx.lineTo(-r * 0.55, -r * 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawHud() {
@@ -430,6 +567,19 @@
     ctx.fillStyle = 'rgba(245,242,234,0.6)';
     ctx.fillText('SPEED', W - 20, 50);
     ctx.textAlign = 'left';
+
+    let badgeY = hudTop + 56;
+    if (state.nitroT > 0) {
+      ctx.fillStyle = '#ffb545';
+      ctx.font = 'bold 15px Trebuchet MS, sans-serif';
+      ctx.fillText('⚡ NITRO  ' + state.nitroT.toFixed(1) + 's', 20, badgeY);
+      badgeY += 24;
+    }
+    if (state.shieldT > 0) {
+      ctx.fillStyle = '#59c9ff';
+      ctx.font = 'bold 15px Trebuchet MS, sans-serif';
+      ctx.fillText('◈ SHIELD  ' + state.shieldT.toFixed(1) + 's', 20, badgeY);
+    }
   }
 
   function render() {
@@ -441,6 +591,7 @@
 
     ctx.clearRect(-20, -20, W + 40, H + 40);
     drawRoad();
+    state.pickups.forEach(drawPickup);
     [...state.cars].sort((a, b) => b.z - a.z).forEach(drawCar);
     drawBike();
 
