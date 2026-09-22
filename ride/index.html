@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ride with Valkyrie</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
-  :root { --accent: #3fae74; }
+  :root { --accent: #3fae74; --accent-dim: rgba(63,174,116,0.5); }
   * { box-sizing: border-box; }
   html, body {
     margin: 0;
@@ -14,16 +15,8 @@
     background: #060a08;
     font-family: 'Trebuchet MS', sans-serif;
   }
-  #stage {
-    position: fixed;
-    inset: 0;
-    touch-action: none;
-  }
-  canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; }
 
   .back-link {
     position: fixed;
@@ -53,27 +46,13 @@
     background: rgba(6, 10, 8, 0.78);
     backdrop-filter: blur(2px);
     padding: 24px;
-    z-index: 4;
+    z-index: 6;
     color: #f5f2ea;
   }
   .overlay[hidden] { display: none; }
-  .overlay h1 {
-    margin: 0 0 6px;
-    font-size: 2em;
-    letter-spacing: 0.5px;
-    color: var(--accent);
-  }
-  .overlay h2 {
-    margin: 0 0 10px;
-    font-size: 1.5em;
-    color: var(--accent);
-  }
-  .overlay p {
-    margin: 0 0 22px;
-    max-width: 460px;
-    line-height: 1.55;
-    opacity: 0.9;
-  }
+  .overlay h1 { margin: 0 0 6px; font-size: 2em; letter-spacing: 0.5px; color: var(--accent); }
+  .overlay h2 { margin: 0 0 10px; font-size: 1.5em; color: var(--accent); }
+  .overlay p { margin: 0 0 22px; max-width: 460px; line-height: 1.55; opacity: 0.9; }
   .go-btn {
     background: var(--accent);
     color: #0d1613;
@@ -88,11 +67,59 @@
     transition: filter 0.2s ease;
   }
   .go-btn:hover { filter: brightness(1.12); }
-  .controls-hint {
-    margin-top: 20px;
-    font-size: 0.85em;
-    opacity: 0.6;
+  .go-btn.ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    margin-top: 10px;
+    padding: 10px 26px;
+    font-size: 1em;
   }
+  .controls-hint { margin-top: 20px; font-size: 0.85em; opacity: 0.6; }
+  .stat-row {
+    display: flex;
+    gap: 22px;
+    margin-bottom: 18px;
+    font-size: 1.05em;
+  }
+  .stat-row b { color: var(--accent); }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .hud-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .badge {
+    background: rgba(10, 20, 15, 0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+  }
+  .badge b { color: var(--accent); }
+  .badge.right { text-align: right; }
+  #toast {
+    align-self: center;
+    background: rgba(10, 20, 15, 0.7);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-weight: bold;
+    letter-spacing: 0.4px;
+    padding: 9px 20px;
+    border-radius: 20px;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
 
   .touch-controls {
     position: fixed;
@@ -103,13 +130,9 @@
     justify-content: space-between;
     padding: 0 18px;
     pointer-events: none;
-    z-index: 3;
+    z-index: 5;
   }
-  .touch-cluster {
-    display: flex;
-    gap: 10px;
-    pointer-events: auto;
-  }
+  .touch-cluster { display: flex; gap: 10px; pointer-events: auto; }
   .touch-cluster.right { flex-direction: column; }
   .touch-btn {
     width: 78px;
@@ -127,36 +150,70 @@
     -webkit-user-select: none;
   }
   .touch-btn:active { background: rgba(63, 174, 116, 0.55); }
-  @media (pointer: coarse) {
-    .touch-controls { display: flex; }
+  @media (pointer: coarse) { .touch-controls { display: flex; } }
+
+  #hit-circle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 480px;
+    height: 480px;
+    background: url('splat.png') center / contain no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 7;
+  }
+  #hit-circle.show { animation: hitPulse 0.5s ease-out; }
+  @keyframes hitPulse {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    18%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); }
   }
 </style>
 </head>
 <body>
 <a class="back-link" href="../index.html">&larr; Roland</a>
 
-<div id="stage">
-  <canvas id="canvas"></canvas>
+<div id="stage"><canvas id="canvas"></canvas></div>
+
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div>
+      <div class="badge">&#127937; <b id="hud-cp">0</b> / <span id="hud-cp-total">6</span></div>
+      <div class="badge">&#129689; <b id="hud-coins">0</b></div>
+    </div>
+    <div>
+      <div class="badge right">&#9201; <b id="hud-time">0.0</b>s</div>
+      <div class="badge right"><b id="hud-speed">0</b> km/h</div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <div></div>
 </div>
 
 <div class="overlay" id="start-overlay">
   <h1>Ride with Valkyrie</h1>
-  <h2>Merge onto the highway</h2>
+  <h2>The whole map is yours</h2>
   <p>
-    Everyone ahead of you is doing the speed limit. Roland never has. Steer around slower traffic
-    on the twisting highway, gas it for distance, brake when a gap closes faster than you can
-    handle. Grab the glowing pickups &mdash; a bolt means nitro, a shield means you can plow
-    straight through traffic for a few seconds.
+    Drive anywhere &mdash; you're not locked to the road, just faster on it. Chase down the glowing
+    green rings in order to complete a lap; the road lights the fastest line, but shortcuts across
+    the grass are fair game. Grab the gold coins and the bolt for a few seconds of nitro.
   </p>
   <button class="go-btn" id="start-btn">Start Engine</button>
   <p class="controls-hint">Steer &larr; &rarr; / A D &nbsp;&middot;&nbsp; Gas &uarr; / W &nbsp;&middot;&nbsp; Brake &darr; / S</p>
 </div>
 
-<div class="overlay" id="crash-overlay" hidden>
-  <h2>Wiped out</h2>
-  <p id="crash-text"></p>
-  <button class="go-btn" id="retry-btn">Try Again</button>
+<div class="overlay" id="finish-overlay" hidden>
+  <h2>Lap Complete</h2>
+  <div class="stat-row">
+    <span>Time <b id="finish-time">0.0s</b></span>
+    <span>Best <b id="finish-best">&mdash;</b></span>
+    <span>Coins <b id="finish-coins">0</b></span>
+  </div>
+  <button class="go-btn" id="again-btn">Race Again</button>
 </div>
+
+<div id="hit-circle"></div>
 
 <div class="touch-controls">
   <div class="touch-cluster left">
@@ -171,441 +228,606 @@
 
 <script>
 (() => {
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
   const stage = document.getElementById('stage');
+  const canvas = document.getElementById('canvas');
+  const hud = document.getElementById('hud');
   const startOverlay = document.getElementById('start-overlay');
-  const crashOverlay = document.getElementById('crash-overlay');
-  const crashText = document.getElementById('crash-text');
+  const finishOverlay = document.getElementById('finish-overlay');
+  const toastEl = document.getElementById('toast');
 
-  let best = 0;
-  try { best = parseInt(localStorage.getItem('valkyrieBestDistance'), 10) || 0; } catch (e) {}
+  const ACCENT = 0x3fae74;
+  const ACCENT_DIM = 0x1f5a3a;
 
-  /* ---------- canvas sizing ---------- */
-  let W = 0, H = 0, DPR = 1;
+  let best = null;
+  try { const b = parseFloat(localStorage.getItem('valkyrieLapBest')); if (Number.isFinite(b)) best = b; } catch (e) {}
+
+  /* ---------- three.js setup ---------- */
+  let scene, camera, renderer;
+  let W = 0, H = 0;
+
+  function initScene() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1a13);
+    scene.fog = new THREE.FogExp2(0x0d1a13, 0.0055);
+
+    camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1200);
+
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    resize();
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const sun = new THREE.DirectionalLight(0xfff2d8, 0.9);
+    sun.position.set(120, 180, 80);
+    scene.add(sun);
+    const accentLight = new THREE.PointLight(ACCENT, 1.4, 140);
+    accentLight.position.set(0, 30, 0);
+    scene.add(accentLight);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(3000, 3000),
+      new THREE.MeshStandardMaterial({ color: 0x122019, roughness: 1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.05;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(2000, 100, ACCENT_DIM, 0x16241c);
+    grid.position.y = 0;
+    scene.add(grid);
+
+  }
+
   function resize() {
     const rect = stage.getBoundingClientRect();
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = rect.width; H = rect.height;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W, H, false);
   }
   window.addEventListener('resize', resize);
-  resize();
 
-  /* ---------- road / perspective ---------- */
-  const HORIZON_FRAC = 0.36;
-  const NEAR_K = 200;
-  const FAR_Z = 4400;
-  const LANES = [-0.55, 0, 0.55];
+  /* ---------- pedestrians: cross the road on foot, back and forth ---------- */
+  const NUM_PEDESTRIANS = 7;
+  let pedestrians = [];
 
-  function horizonY() { return H * HORIZON_FRAC; }
-  function roadNearHalf() { return W * 0.5; }
-  function roadFarHalf() { return W * 0.02; }
-  function perspective(z) { return NEAR_K / (NEAR_K + Math.max(0, z)); }
-  function screenYFor(p) { return horizonY() + p * (H - horizonY()); }
-  function roadHalfAt(p) { return roadFarHalf() + p * (roadNearHalf() - roadFarHalf()); }
+  // Photo-cutout aspect ratio (pedestrian.png is a trimmed transparent PNG of
+  // just the person, no background) so the billboard doesn't look stretched.
+  const PEDESTRIAN_ASPECT = 190 / 552;
+  const PEDESTRIAN_HEIGHT = 3.4;
 
-  // Pure function of absolute world distance: a smooth, deterministic S-curve
-  // path for the road to follow. No integration/state needed to evaluate it
-  // at any point, which keeps every renderer call (cars, dashes, edges) trivial.
-  function curveOffset(worldZ) {
-    return Math.sin(worldZ / 1100) * 360 + Math.sin(worldZ / 2600 + 1.4) * 560;
-  }
-  // Lateral screen shift for something `relZ` ahead of the camera, caused by
-  // the road bending between here and there. Zero at relZ=0 by construction,
-  // so the player is always drawn sitting correctly on "their" point of road.
-  function curveScreenShift(relZ, p) {
-    return (curveOffset(state.travel + relZ) - curveOffset(state.travel)) * p * 0.55;
-  }
-  function screenXFor(laneX, relZ, p) {
-    return W / 2 + curveScreenShift(relZ, p) + laneX * roadHalfAt(p);
-  }
+  function buildPedestrianMesh(texture) {
+    const group = new THREE.Group();
 
-  /* ---------- tuning ---------- */
-  const CRUISE_MIN = 320, CRUISE_MAX = 1500;
-  const AUTO_RAMP = 9;
-  const GAS_ACCEL = 640;
-  const BRAKE_DECEL = 950;
-  const STEER_RATE = 2.8;
-  const LANE_LIMIT = 0.92;
-  const HIT_LANE_RADIUS = 0.24;
-  const HIT_Z = 38;
-  const NUM_CARS = 7;
-  const SHAKE_DURATION = 0.5;
-  const CAR_COLORS = ['#c1443b', '#3d6fbf', '#d4a936', '#8a8f98', '#4a8f5a'];
+    // Warning glow on the ground -- makes him readable from a distance in the
+    // fog/dark scene well before the photo itself resolves into a face.
+    const glowMat = new THREE.SpriteMaterial({ map: makeGlowTexture(), color: 0xffa63d, transparent: true, depthWrite: false });
+    const glow = new THREE.Sprite(glowMat);
+    glow.scale.set(5, 5, 1);
+    glow.position.y = 0.05;
+    group.add(glow);
 
-  const NUM_PICKUPS = 3;
-  const PICKUP_TYPES = ['nitro', 'shield'];
-  const PICKUP_HIT_Z = 46;
-  const PICKUP_HIT_RADIUS = 0.30;
-  const NITRO_DURATION = 4;
-  const NITRO_SPEED = 1900, NITRO_MAX = 2200, NITRO_ACCEL = 900;
-  const SHIELD_DURATION = 5;
+    const light = new THREE.PointLight(0xffa63d, 1.1, 12);
+    light.position.y = 1.6;
+    group.add(light);
 
-  function randRange(a, b) { return a + Math.random() * (b - a); }
-  function randLane() { return LANES[Math.floor(Math.random() * LANES.length)]; }
+    // A Sprite always faces the camera on its own, so no facing/rotation logic
+    // is needed here at all -- it sidesteps the billboard-orientation issues
+    // a flat Mesh would need to worry about.
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+    const width = PEDESTRIAN_HEIGHT * PEDESTRIAN_ASPECT;
+    sprite.scale.set(width, PEDESTRIAN_HEIGHT, 1);
+    sprite.position.y = PEDESTRIAN_HEIGHT / 2;
+    group.add(sprite);
 
-  function freshCar(speed, farSpawn) {
-    return {
-      z: farSpawn ? randRange(500, FAR_Z) : randRange(FAR_Z * 0.65, FAR_Z),
-      lane: randLane(),
-      speed: speed * randRange(0.3, 0.68),
-      color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)]
-    };
+    return { group, sprite, glow };
   }
 
-  function freshPickup(farSpawn) {
-    return {
-      z: farSpawn ? randRange(900, FAR_Z) : randRange(FAR_Z * 0.6, FAR_Z),
-      lane: randLane(),
-      type: PICKUP_TYPES[Math.floor(Math.random() * PICKUP_TYPES.length)]
-    };
+  let glowTexture = null;
+  function makeGlowTexture() {
+    if (glowTexture) return glowTexture;
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.4, 'rgba(255,200,120,0.55)');
+    g.addColorStop(1, 'rgba(255,166,61,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    glowTexture = new THREE.CanvasTexture(c);
+    return glowTexture;
   }
 
-  function freshState() {
-    const speed = CRUISE_MIN;
-    return {
-      running: false,
-      crashed: false,
-      laneX: 0,
-      speed,
-      dist: 0,
-      travel: 0,
-      roadOffset: 0,
-      shakeT: 0,
-      flashA: 0,
-      nitroT: 0,
-      shieldT: 0,
-      cars: Array.from({ length: NUM_CARS }, () => freshCar(speed, true)),
-      pickups: Array.from({ length: NUM_PICKUPS }, () => freshPickup(true))
-    };
-  }
-  let state = freshState();
-  const input = { left: false, right: false, gas: false, brake: false };
-
-  function step(dt) {
-    if (state.shakeT > 0) {
-      state.shakeT = Math.max(0, state.shakeT - dt);
-      state.flashA = state.shakeT / SHAKE_DURATION;
-      if (state.shakeT === 0) revealCrash();
-    }
-    if (!state.running || state.crashed) return;
-
-    if (state.nitroT > 0) {
-      state.nitroT = Math.max(0, state.nitroT - dt);
-      state.speed = Math.max(state.speed, NITRO_SPEED) + NITRO_ACCEL * dt;
-    }
-    if (state.shieldT > 0) state.shieldT = Math.max(0, state.shieldT - dt);
-
-    const speedCap = state.nitroT > 0 ? NITRO_MAX : CRUISE_MAX;
-    state.speed += AUTO_RAMP * dt;
-    if (input.gas) state.speed += GAS_ACCEL * dt;
-    if (input.brake) state.speed -= BRAKE_DECEL * dt;
-    state.speed = Math.max(CRUISE_MIN, Math.min(speedCap, state.speed));
-
-    const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    state.laneX += steer * STEER_RATE * dt;
-    state.laneX = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, state.laneX));
-
-    state.dist += state.speed * dt / 12;
-    state.travel += state.speed * dt;
-    state.roadOffset += state.speed * dt;
-
-    for (const car of state.cars) {
-      car.z -= (state.speed - car.speed) * dt;
-
-      if (car.z < HIT_Z && car.z > -HIT_Z &&
-          Math.abs(car.lane - state.laneX) < HIT_LANE_RADIUS) {
-        if (state.shieldT > 0) {
-          Object.assign(car, freshCar(state.speed, false));
-        } else {
-          crash();
-          return;
-        }
-      }
-      if (car.z < -80) Object.assign(car, freshCar(state.speed, false));
-    }
-
-    for (const p of state.pickups) {
-      p.z -= state.speed * dt;
-
-      if (p.z < PICKUP_HIT_Z && p.z > -PICKUP_HIT_Z &&
-          Math.abs(p.lane - state.laneX) < PICKUP_HIT_RADIUS) {
-        collectPickup(p);
-        continue;
-      }
-      if (p.z < -80) Object.assign(p, freshPickup(false));
-    }
-  }
-
-  function collectPickup(p) {
-    if (p.type === 'nitro') state.nitroT = NITRO_DURATION;
-    else if (p.type === 'shield') state.shieldT = SHIELD_DURATION;
-    Object.assign(p, freshPickup(false));
-  }
-
-  function crash() {
-    state.crashed = true;
-    state.running = false;
-    state.shakeT = SHAKE_DURATION;
-    state.flashA = 1;
-    const d = Math.round(state.dist);
-    let record = false;
-    if (d > best) { best = d; record = true; try { localStorage.setItem('valkyrieBestDistance', String(best)); } catch (e) {} }
-    crashText.textContent = 'Rear-ended a straggler at ' + Math.round(state.speed) + ' units. ' +
-      'You made it ' + d + ' meters' + (record && d > 0 ? ' — new best.' : '.');
-  }
-  function revealCrash() { crashOverlay.hidden = false; }
-
-  /* ---------- rendering ---------- */
-  const ROAD_STEPS = 56;
-
-  function drawRoad() {
-    const hy = horizonY();
-    ctx.fillStyle = '#0d1f16';
-    ctx.fillRect(0, 0, W, hy);
-    ctx.fillStyle = '#141f18';
-    ctx.fillRect(0, hy, W, H - hy);
-
-    // build the road as a curved ribbon: walk out to the horizon along the
-    // right edge, then back along the left edge, following curveScreenShift
-    const rightEdge = [], leftEdge = [];
-    for (let i = 0; i <= ROAD_STEPS; i++) {
-      const z = FAR_Z * (i / ROAD_STEPS) ** 1.6;   // denser sampling near the camera
-      const p = perspective(z), y = screenYFor(p);
-      rightEdge.push([screenXFor(1, z, p), y]);
-      leftEdge.push([screenXFor(-1, z, p), y]);
-    }
-
-    ctx.fillStyle = '#25282b';
-    ctx.beginPath();
-    ctx.moveTo(rightEdge[0][0], rightEdge[0][1]);
-    for (const [x, y] of rightEdge) ctx.lineTo(x, y);
-    for (let i = leftEdge.length - 1; i >= 0; i--) ctx.lineTo(leftEdge[i][0], leftEdge[i][1]);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = '#3fae74';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    rightEdge.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-    ctx.stroke();
-    ctx.beginPath();
-    leftEdge.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    const dashSpacing = 240, dashLen = 50;
-    const dashCount = Math.ceil(FAR_Z / dashSpacing) + 2;
-    for (let i = 0; i < dashCount; i++) {
-      let z = i * dashSpacing - (state.roadOffset % dashSpacing);
-      if (z < 0 || z > FAR_Z) continue;
-      const p0 = perspective(z), p1 = perspective(z + dashLen);
-      const y0 = screenYFor(p0), y1 = screenYFor(p1);
-      [-0.33, 0.33].forEach(laneLine => {
-        ctx.lineWidth = 1 + p0 * 3;
-        ctx.beginPath();
-        ctx.moveTo(screenXFor(laneLine, z, p0), y0);
-        ctx.lineTo(screenXFor(laneLine, z + dashLen, p1), y1);
-        ctx.stroke();
+  function buildPedestrians() {
+    const texture = new THREE.TextureLoader().load('pedestrian.png');
+    for (let i = 0; i < NUM_PEDESTRIANS; i++) {
+      const parts = buildPedestrianMesh(texture);
+      scene.add(parts.group);
+      pedestrians.push({
+        ...parts,
+        t: (i + 0.5) / NUM_PEDESTRIANS,
+        phase: Math.random() * Math.PI * 2,
+        walkSpeed: randRange(0.5, 0.8),
+        span: ROAD_HALF_WIDTH + randRange(4, 7),
+        hiddenT: 0
       });
     }
   }
 
-  function roundRect(x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
+  function updatePedestrians(dt) {
+    const now = performance.now();
+    for (const ped of pedestrians) {
+      if (ped.hiddenT > 0) {
+        ped.hiddenT = Math.max(0, ped.hiddenT - dt);
+        if (ped.hiddenT === 0) {
+          ped.group.visible = true;
+          ped.phase = Math.random() * Math.PI * 2;   // respawn mid-cycle elsewhere
+        }
+        continue;
+      }
+
+      const p = trackCurve.getPointAt(ped.t);
+      const tangent = trackCurve.getTangentAt(ped.t).normalize();
+      const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+
+      const wave = Math.sin(now * 0.001 * ped.walkSpeed + ped.phase);
+      const crossOffset = wave * ped.span;
+      ped.group.position.set(p.x + side.x * crossOffset, 0, p.z + side.z * crossOffset);
+
+      // little vertical bob for a walking feel (a Sprite billboards to the
+      // camera on its own, so there's no facing/leg-articulation to manage)
+      const bob = Math.abs(Math.sin(now * 0.006 * ped.walkSpeed + ped.phase)) * 0.06;
+      ped.sprite.position.y = PEDESTRIAN_HEIGHT / 2 + bob;
+
+      const pulse = 1 + 0.15 * Math.sin(now * 0.004 + ped.phase);
+      ped.glow.scale.set(5 * pulse, 5 * pulse, 1);
+
+      if (crashCooldown <= 0 && pos.distanceTo(ped.group.position) < 2.6) {
+        speed *= -0.3;
+        crashCooldown = 1.2;
+        showToast('WATCH OUT!');
+        ped.group.visible = false;
+        ped.hiddenT = 2.2;
+        flashHitCircle();
+      }
+    }
   }
 
-  function drawCar(car) {
-    if (car.z <= 0 || car.z > FAR_Z) return;
-    const p = perspective(car.z);
-    const cx = screenXFor(car.lane, car.z, p);
-    const cy = screenYFor(p);
-    const w = 24 + p * 170;
-    const h = w * 0.62;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + h * 0.42, w * 0.5, h * 0.16, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const r = Math.min(10, w * 0.12);
-    roundRect(cx - w / 2, cy - h, w, h, r);
-    ctx.fillStyle = car.color;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = Math.max(1, p * 3);
-    ctx.stroke();
-
-    roundRect(cx - w * 0.32, cy - h * 0.92, w * 0.64, h * 0.34, r * 0.5);
-    ctx.fillStyle = 'rgba(15,20,18,0.75)';
-    ctx.fill();
-
-    ctx.fillStyle = '#ff4d4d';
-    const lw = w * 0.14, lh = h * 0.14;
-    ctx.fillRect(cx - w / 2 + w * 0.05, cy - lh * 1.4, lw, lh);
-    ctx.fillRect(cx + w / 2 - w * 0.05 - lw, cy - lh * 1.4, lw, lh);
+  const hitCircleEl = document.getElementById('hit-circle');
+  function flashHitCircle() {
+    hitCircleEl.classList.remove('show');
+    void hitCircleEl.offsetWidth;   // force reflow so the animation restarts on repeat hits
+    hitCircleEl.classList.add('show');
   }
 
-  function drawBike() {
-    const cx = screenXFor(state.laneX, 0, 1);
-    const baseY = H;
+  /* ---------- track ---------- */
+  const TRACK_POINTS = [
+    [0, 0], [70, 45], [150, 65], [205, 15], [195, -75],
+    [120, -140], [25, -160], [-70, -125], [-140, -50], [-115, 45], [-40, 75]
+  ];
+  const ROAD_HALF_WIDTH = 9;
+  let trackCurve, trackSamples = [];
+  const NUM_CHECKPOINTS = 6;
+  let checkpoints = [];
+  let coins = [];
+  let nitroPickups = [];
+
+  function buildTrack() {
+    const pts = TRACK_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z));
+    trackCurve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+
+    const SAMPLE_N = 260;
+    for (let i = 0; i <= SAMPLE_N; i++) {
+      const p = trackCurve.getPointAt((i / SAMPLE_N) % 1);
+      trackSamples.push(p);
+    }
+
+    const geo = buildRoadGeometry(trackCurve, 220, ROAD_HALF_WIDTH * 2);
+    const mat = new THREE.MeshStandardMaterial({
+      map: makeRoadTexture(),
+      roughness: 0.85,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    });
+    scene.add(new THREE.Mesh(geo, mat));
+
+    for (let i = 0; i < NUM_CHECKPOINTS; i++) {
+      // start at 1/N, not 0, so the first ring is out on the track rather than
+      // sitting on the spawn point; the final ring lands back at start/finish
+      const t = (i + 1) / NUM_CHECKPOINTS;
+      const pos = trackCurve.getPointAt(t);
+      const tangent = trackCurve.getTangentAt(t).normalize();
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(6.5, 0.45, 10, 28),
+        new THREE.MeshBasicMaterial({ color: ACCENT_DIM })
+      );
+      ring.position.copy(pos).setY(4.2);
+      ring.lookAt(pos.clone().add(tangent));
+      scene.add(ring);
+      checkpoints.push({ mesh: ring, pos });
+    }
+    highlightNextCheckpoint();
+
+    const coinGeo = new THREE.CylinderGeometry(0.75, 0.75, 0.18, 14);
+    const coinMat = new THREE.MeshStandardMaterial({ color: 0xf0b429, metalness: 0.7, roughness: 0.25 });
+    for (let i = 0; i < 26; i++) {
+      const t = (i + 0.5) / 26;
+      const pos = trackCurve.getPointAt(t % 1);
+      const tangent = trackCurve.getTangentAt(t % 1).normalize();
+      const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+      const offset = Math.sin(i * 2.4) * (ROAD_HALF_WIDTH - 2);
+      const cx = pos.x + side.x * offset, cz = pos.z + side.z * offset;
+      const mesh = new THREE.Mesh(coinGeo, coinMat);
+      mesh.position.set(cx, 1.1, cz);
+      mesh.rotation.x = Math.PI / 2;
+      scene.add(mesh);
+      coins.push({ mesh, taken: false });
+    }
+
+    for (let i = 0; i < 4; i++) spawnNitroPickup(i / 4);
+
+    trackLength = 0;
+    for (let i = 1; i < trackSamples.length; i++) trackLength += trackSamples[i].distanceTo(trackSamples[i - 1]);
+
+    buildSuvs();
+    buildPedestrians();
+  }
+
+  /* ---------- SUV enemies ---------- */
+  const SUV_COUNT = 5;
+  const SUV_WORLD_SPEED = 20;
+  let suvs = [];
+  let trackLength = 0;
+
+  function buildSuvGeometry() {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe9ebe6, roughness: 0.4, metalness: 0.25 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x1c2622, roughness: 0.3 });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0c0f0d, roughness: 0.85 });
+
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.1, 4.6), bodyMat);
+    lower.position.y = 0.95;
+    group.add(lower);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.9, 2.6), glassMat);
+    cabin.position.set(0, 1.75, -0.2);
+    group.add(cabin);
+
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.4, 0.3), bodyMat);
+    bumper.position.set(0, 0.55, 2.3);
+    group.add(bumper);
+
+    [[-1.05, 2.0], [1.05, 2.0], [-1.05, -1.9], [1.05, -1.9]].forEach(([x, z]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 14), wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.55, z);
+      group.add(wheel);
+    });
+
+    return group;
+  }
+
+  function buildSuvs() {
+    for (let i = 0; i < SUV_COUNT; i++) {
+      const mesh = buildSuvGeometry();
+      scene.add(mesh);
+      suvs.push({
+        mesh,
+        t: i / SUV_COUNT,
+        tSpeed: SUV_WORLD_SPEED / Math.max(1, trackLength)
+      });
+    }
+  }
+
+  function updateSuvs(dt) {
+    for (const suv of suvs) {
+      suv.t = (suv.t + suv.tSpeed * dt) % 1;
+      const p = trackCurve.getPointAt(suv.t);
+      const tangent = trackCurve.getTangentAt(suv.t).normalize();
+      suv.mesh.position.set(p.x, 0, p.z);
+      suv.mesh.lookAt(p.x + tangent.x, 0, p.z + tangent.z);
+
+      if (crashCooldown <= 0 && pos.distanceTo(suv.mesh.position) < 3.6) {
+        speed *= -0.35;
+        crashCooldown = 1.2;
+        showToast('CRASHED!');
+      }
+    }
+  }
+
+  function nearestTrackDist(x, z) {
+    let best = Infinity;
+    for (let i = 0; i < trackSamples.length; i++) {
+      const s = trackSamples[i];
+      const dx = s.x - x, dz = s.z - z;
+      const d = dx * dx + dz * dz;
+      if (d < best) best = d;
+    }
+    return Math.sqrt(best);
+  }
+
+  function buildRoadGeometry(curve, segments, width) {
+    const positions = [], uvs = [], indices = [];
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i <= segments; i++) {
+      const u = (i / segments) % 1;
+      const pt = curve.getPointAt(u);
+      const tangent = curve.getTangentAt(u).normalize();
+      const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      const left = pt.clone().addScaledVector(side, width / 2);
+      const right = pt.clone().addScaledVector(side, -width / 2);
+      positions.push(left.x, 0.03, left.z, right.x, 0.03, right.z);
+      uvs.push(0, i, 1, i);
+      if (i < segments) {
+        const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function makeRoadTexture() {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 512;
+    const x = c.getContext('2d');
+    x.fillStyle = '#26282a'; x.fillRect(0, 0, 128, 512);
+    x.fillStyle = 'rgba(255,255,255,0.04)';
+    for (let i = 0; i < 900; i++) x.fillRect(Math.random() * 128, Math.random() * 512, 2, 2);
+    x.fillStyle = '#3fae74';
+    x.fillRect(0, 0, 7, 512);
+    x.fillRect(121, 0, 7, 512);
+    x.fillStyle = 'rgba(255,255,255,0.5)';
+    for (let y = 0; y < 512; y += 44) x.fillRect(60, y, 8, 26);
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 1);
+    return tex;
+  }
+
+  function spawnNitroPickup(tHint) {
+    const t = tHint !== undefined ? tHint : Math.random();
+    const pos = trackCurve.getPointAt(t);
+    const tangent = trackCurve.getTangentAt(t).normalize();
+    const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+    const offset = randRange(-ROAD_HALF_WIDTH + 2, ROAD_HALF_WIDTH - 2);
+    const group = new THREE.Group();
+    const glow = new THREE.PointLight(0xffb545, 1.2, 14);
+    group.add(glow);
+    const core = new THREE.Mesh(
+      new THREE.OctahedronGeometry(1.1, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffb545, emissive: 0x995500, emissiveIntensity: 0.6 })
+    );
+    group.add(core);
+    group.position.set(pos.x + side.x * offset, 1.8, pos.z + side.z * offset);
+    scene.add(group);
+    nitroPickups.push({ group, core });
+  }
+
+  function randRange(a, b) { return a + Math.random() * (b - a); }
+
+  /* ---------- bike ---------- */
+  let bike;
+  function buildBike() {
+    bike = new THREE.Group();
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x141c18, metalness: 0.5, roughness: 0.35 });
+    const accentMat = new THREE.MeshStandardMaterial({ color: ACCENT, metalness: 0.4, roughness: 0.3 });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0c0f0d, roughness: 0.8 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 2.6), bodyMat);
+    body.position.y = 0.85;
+    bike.add(body);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.16, 2.6), accentMat);
+    stripe.position.y = 1.05;
+    bike.add(stripe);
+
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.0, 4), bodyMat);
+    nose.rotation.x = Math.PI / 2;
+    nose.rotation.y = Math.PI / 4;
+    nose.position.set(0, 0.85, 1.7);
+    bike.add(nose);
+
+    const seatHump = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), bodyMat);
+    seatHump.position.set(0, 1.15, -1.1);
+    bike.add(seatHump);
+
+    // Rider ID badge on the tail, facing back toward the chase camera.
+    // Must clear the seat-hump sphere's rear extent (center z=-1.1, radius 0.45,
+    // so it reaches back to z=-1.55) or the sphere occludes it.
+    const badgeRing = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 24), accentMat);
+    badgeRing.rotation.x = Math.PI / 2;
+    badgeRing.position.set(0, 1.15, -1.62);
+    bike.add(badgeRing);
+
+    const riderTexture = new THREE.TextureLoader().load('rider.jpg');
+    const badgePhoto = new THREE.Mesh(
+      new THREE.CircleGeometry(0.27, 24),
+      new THREE.MeshBasicMaterial({ map: riderTexture, side: THREE.DoubleSide })
+    );
+    badgePhoto.rotation.y = Math.PI;
+    badgePhoto.scale.x = -1;   // undo the mirroring from the 180deg turn-to-face-camera
+    badgePhoto.position.set(0, 1.15, -1.65);
+    bike.add(badgePhoto);
+
+    [[-0.75, 0, 0.9], [0.75, 0, 0.9], [-0.75, 0, -0.9], [0.75, 0, -0.9]].forEach(([x, y, z]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.35, 16), wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.5, z);
+      bike.add(wheel);
+    });
+
+    const headlight = new THREE.SpotLight(0xcfe8ff, 3, 60, Math.PI / 6, 0.4, 1);
+    headlight.position.set(0, 1.0, 1.6);
+    headlight.target.position.set(0, 0, 12);
+    bike.add(headlight, headlight.target);
+
+    const tail = new THREE.PointLight(ACCENT, 0.8, 8);
+    tail.position.set(0, 0.9, -1.4);
+    bike.add(tail);
+
+    scene.add(bike);
+  }
+
+  /* ---------- state ---------- */
+  const MAX_SPEED = 46, MAX_REVERSE = -14;
+  const ACCEL = 24, BRAKE_DECEL = 40, DRAG = 14;
+  const TURN_RATE = 2.0;
+  const NITRO_SPEED = 74, NITRO_DURATION = 4;
+
+  let pos, heading, speed, nitroT, crashCooldown;
+  let running = false;
+  let lapClock = 0;
+  let nextCp = 0;
+  let runCoins = 0;
+  const input = { left: false, right: false, gas: false, brake: false };
+
+  function resetRun(full) {
+    pos = new THREE.Vector3(0, 0, 0);
+    heading = 0;
+    speed = 0;
+    nitroT = 0;
+    crashCooldown = 0;
+    nextCp = 0;
+    lapClock = 0;
+    if (full) {
+      runCoins = 0;
+      coins.forEach(c => { c.taken = false; c.mesh.visible = true; });
+      pedestrians.forEach(p => { p.hiddenT = 0; p.group.visible = true; });
+    }
+    checkpoints.forEach(cp => cp.mesh.material.color.setHex(ACCENT_DIM));
+    highlightNextCheckpoint();
+    updateHud();
+  }
+
+  function highlightNextCheckpoint() {
+    checkpoints.forEach((cp, i) => {
+      cp.mesh.material.color.setHex(i === nextCp ? 0x10e08a : ACCENT_DIM);
+    });
+  }
+
+  function step(dt) {
+    if (!running) return;
+
+    if (nitroT > 0) nitroT = Math.max(0, nitroT - dt);
+    if (crashCooldown > 0) crashCooldown = Math.max(0, crashCooldown - dt);
+    const onRoad = nearestTrackDist(pos.x, pos.z) < ROAD_HALF_WIDTH;
+    const topSpeed = (nitroT > 0 ? NITRO_SPEED : MAX_SPEED) * (onRoad ? 1 : 0.6);
+
+    if (input.gas) speed += ACCEL * dt;
+    else if (input.brake) speed -= BRAKE_DECEL * dt;
+    else {
+      // exponential coast-down: always converges cleanly to exactly 0,
+      // unlike a fixed per-frame subtract which can settle into a small
+      // nonzero oscillation once it overshoots past zero
+      speed *= Math.max(0, 1 - DRAG * 0.6 * dt);
+      if (Math.abs(speed) < 0.02) speed = 0;
+    }
+    speed = Math.max(MAX_REVERSE, Math.min(topSpeed, speed));
+    if (!onRoad) speed = Math.min(speed, topSpeed);
+
     const steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    const lean = steer * 14;   // handlebar/shoulder shift for a bit of steering feedback
+    const speedFactor = Math.max(0.35, Math.min(1, Math.abs(speed) / 10));
+    heading -= steer * TURN_RATE * dt * speedFactor * (speed < 0 ? -1 : 1);
 
-    ctx.save();
-    if (state.shieldT > 0) {
-      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 120);
-      ctx.strokeStyle = 'rgba(80, 210, 255, ' + (0.35 + 0.25 * pulse) + ')';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(cx, baseY - 26, 96, Math.PI * 1.08, Math.PI * 1.92);
-      ctx.stroke();
+    pos.x += Math.sin(heading) * speed * dt;
+    pos.z += Math.cos(heading) * speed * dt;
+
+    bike.position.set(pos.x, 0, pos.z);
+    bike.rotation.y = heading;
+    const targetLean = -steer * 0.28;
+    bike.rotation.z += (targetLean - bike.rotation.z) * Math.min(1, 8 * dt);
+
+    lapClock += dt;
+
+    for (const c of coins) {
+      if (c.taken) continue;
+      if (pos.distanceTo(c.mesh.position) < 3.2) {
+        c.taken = true; c.mesh.visible = false; runCoins++;
+      }
+    }
+    updateSuvs(dt);
+    updatePedestrians(dt);
+
+    for (const p of nitroPickups) {
+      if (pos.distanceTo(p.group.position) < 3.4) {
+        nitroT = NITRO_DURATION;
+        respawnNitro(p);
+        showToast('NITRO!');
+      }
+      p.core.rotation.y += dt * 3;
+      p.group.position.y = 1.8 + Math.sin(performance.now() / 260 + p.group.position.x) * 0.3;
     }
 
-    ctx.fillStyle = '#0f1613';
-    ctx.beginPath();
-    ctx.moveTo(cx - 100, baseY);
-    ctx.lineTo(cx - 64 + lean, baseY - 50);
-    ctx.lineTo(cx - 18 + lean * 0.5, baseY - 32);
-    ctx.lineTo(cx + lean * 0.3, baseY - 44);
-    ctx.lineTo(cx + 18 + lean * 0.5, baseY - 32);
-    ctx.lineTo(cx + 64 + lean, baseY - 50);
-    ctx.lineTo(cx + 100, baseY);
-    ctx.closePath();
-    ctx.fill();
+    if (nextCp < checkpoints.length) {
+      const cp = checkpoints[nextCp];
+      if (pos.distanceTo(cp.pos) < 8) {
+        nextCp++;
+        if (nextCp >= checkpoints.length) {
+          finishLap();
+        } else {
+          showToast('CHECKPOINT ' + nextCp + ' / ' + checkpoints.length);
+          highlightNextCheckpoint();
+        }
+      }
+    }
 
-    ctx.fillStyle = '#1c1c1c';
-    ctx.beginPath(); ctx.ellipse(cx - 70 + lean, baseY - 22, 17, 10, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx + 70 + lean, baseY - 22, 17, 10, 0.3, 0, Math.PI * 2); ctx.fill();
-
-    ctx.strokeStyle = state.nitroT > 0 ? 'rgba(255,170,60,0.75)' : 'rgba(63,174,116,0.5)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx + lean * 0.3, baseY - 22, 42, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.stroke();
-    ctx.restore();
+    updateCamera(dt);
+    updateHud();
   }
 
-  function drawPickup(p) {
-    if (p.z <= 0 || p.z > FAR_Z) return;
-    const per = perspective(p.z);
-    const cx = screenXFor(p.lane, p.z, per);
-    const cy = screenYFor(per) - (18 + per * 30);
-    const r = 8 + per * 22;
-    const bob = Math.sin(performance.now() / 260 + p.lane * 5) * r * 0.15;
-    const color = p.type === 'nitro' ? '#ffb545' : '#59c9ff';
-
-    ctx.save();
-    ctx.translate(cx, cy + bob);
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
-    glow.addColorStop(0, color + 'aa');
-    glow.addColorStop(1, color + '00');
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2); ctx.fill();
-
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.lineWidth = Math.max(1, per * 2.5);
-    ctx.stroke();
-
-    ctx.fillStyle = '#0d1613';
-    if (p.type === 'nitro') {
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.15, -r * 0.6); ctx.lineTo(r * 0.35, -r * 0.1);
-      ctx.lineTo(r * 0.05, -r * 0.1); ctx.lineTo(r * 0.15, r * 0.6);
-      ctx.lineTo(-r * 0.35, r * 0.05); ctx.lineTo(-r * 0.05, r * 0.05);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(0, -r * 0.65);
-      ctx.lineTo(r * 0.55, -r * 0.3);
-      ctx.lineTo(r * 0.55, r * 0.2);
-      ctx.lineTo(0, r * 0.65);
-      ctx.lineTo(-r * 0.55, r * 0.2);
-      ctx.lineTo(-r * 0.55, -r * 0.3);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
+  function respawnNitro(p) {
+    const t = Math.random();
+    const tp = trackCurve.getPointAt(t);
+    const tangent = trackCurve.getTangentAt(t).normalize();
+    const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
+    const offset = randRange(-ROAD_HALF_WIDTH + 2, ROAD_HALF_WIDTH - 2);
+    p.group.position.x = tp.x + side.x * offset;
+    p.group.position.z = tp.z + side.z * offset;
   }
 
-  function drawHud() {
-    ctx.textBaseline = 'top';
-    const hudTop = 56;
-    ctx.font = 'bold 22px Trebuchet MS, sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillText('DISTANCE  ' + Math.round(state.dist) + ' m', 21, hudTop + 1);
-    ctx.fillStyle = '#f5f2ea';
-    ctx.fillText('DISTANCE  ' + Math.round(state.dist) + ' m', 20, hudTop);
-
-    ctx.font = 'bold 15px Trebuchet MS, sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillText('BEST  ' + best + ' m', 21, hudTop + 31);
-    ctx.fillStyle = '#3fae74';
-    ctx.fillText('BEST  ' + best + ' m', 20, hudTop + 30);
-
-    // speedometer, top right
-    const label = Math.round(state.speed);
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 28px Trebuchet MS, sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillText(label, W - 19, 21);
-    ctx.fillStyle = '#f5f2ea';
-    ctx.fillText(label, W - 20, 20);
-    ctx.font = 'bold 12px Trebuchet MS, sans-serif';
-    ctx.fillStyle = 'rgba(245,242,234,0.6)';
-    ctx.fillText('SPEED', W - 20, 50);
-    ctx.textAlign = 'left';
-
-    let badgeY = hudTop + 56;
-    if (state.nitroT > 0) {
-      ctx.fillStyle = '#ffb545';
-      ctx.font = 'bold 15px Trebuchet MS, sans-serif';
-      ctx.fillText('⚡ NITRO  ' + state.nitroT.toFixed(1) + 's', 20, badgeY);
-      badgeY += 24;
-    }
-    if (state.shieldT > 0) {
-      ctx.fillStyle = '#59c9ff';
-      ctx.font = 'bold 15px Trebuchet MS, sans-serif';
-      ctx.fillText('◈ SHIELD  ' + state.shieldT.toFixed(1) + 's', 20, badgeY);
-    }
+  function finishLap() {
+    running = false;
+    const t = lapClock;
+    let record = false;
+    if (best === null || t < best) { best = t; record = true; try { localStorage.setItem('valkyrieLapBest', String(best)); } catch (e) {} }
+    document.getElementById('finish-time').textContent = t.toFixed(1) + 's';
+    document.getElementById('finish-best').textContent = best.toFixed(1) + 's' + (record ? ' — new best!' : '');
+    document.getElementById('finish-coins').textContent = runCoins;
+    finishOverlay.hidden = false;
   }
 
-  function render() {
-    ctx.save();
-    if (state.shakeT > 0) {
-      const mag = 14 * (state.shakeT / SHAKE_DURATION);
-      ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
-    }
+  function updateCamera(dt) {
+    const back = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
+    const desired = bike.position.clone()
+      .addScaledVector(back, 11 + Math.abs(speed) * 0.06)
+      .add(new THREE.Vector3(0, 5.5 + Math.abs(speed) * 0.03, 0));
+    camera.position.lerp(desired, Math.min(1, 5 * dt));
+    const lookAt = bike.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+    camera.lookAt(lookAt);
+  }
 
-    ctx.clearRect(-20, -20, W + 40, H + 40);
-    drawRoad();
-    state.pickups.forEach(drawPickup);
-    [...state.cars].sort((a, b) => b.z - a.z).forEach(drawCar);
-    drawBike();
+  let toastTimer = null;
+  function showToast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1400);
+  }
 
-    const speedT = (state.speed - CRUISE_MIN) / (CRUISE_MAX - CRUISE_MIN);
-    ctx.fillStyle = 'rgba(0,0,0,' + (0.12 * speedT) + ')';
-    ctx.fillRect(0, 0, W, horizonY());
-
-    if (state.flashA > 0) {
-      ctx.fillStyle = 'rgba(200,30,20,' + (0.5 * state.flashA) + ')';
-      ctx.fillRect(-20, -20, W + 40, H + 40);
-    }
-
-    drawHud();
-    ctx.restore();
+  function updateHud() {
+    document.getElementById('hud-cp').textContent = nextCp;
+    document.getElementById('hud-cp-total').textContent = checkpoints.length;
+    document.getElementById('hud-coins').textContent = runCoins;
+    document.getElementById('hud-time').textContent = lapClock.toFixed(1);
+    document.getElementById('hud-speed').textContent = Math.max(0, Math.round(speed * 9.8));
   }
 
   /* ---------- loop ---------- */
@@ -615,13 +837,13 @@
     const dt = Math.min((now - last) / 1000, 1 / 30);
     last = now;
     step(dt);
-    render();
+    renderer.render(scene, camera);
     rafId = requestAnimationFrame(loop);
   }
   function startLoop() { if (!rafId) { last = 0; rafId = requestAnimationFrame(loop); } }
   function stopLoop() { if (rafId) cancelAnimationFrame(rafId); rafId = null; }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopLoop(); else if (state.running || state.shakeT > 0) startLoop();
+    if (document.hidden) stopLoop(); else if (running) startLoop();
   });
 
   /* ---------- input ---------- */
@@ -644,16 +866,24 @@
   bindHold(document.getElementById('btn-brake'), 'brake');
 
   function begin() {
-    state = freshState();
-    state.running = true;
+    resetRun(true);
+    running = true;
     startOverlay.hidden = true;
-    crashOverlay.hidden = true;
+    finishOverlay.hidden = true;
+    hud.hidden = false;
     startLoop();
+    resize();
   }
   document.getElementById('start-btn').addEventListener('click', begin);
-  document.getElementById('retry-btn').addEventListener('click', begin);
+  document.getElementById('again-btn').addEventListener('click', begin);
 
-  render();
+  initScene();
+  buildTrack();
+  buildBike();
+  resetRun(true);
+  camera.position.set(0, 20, -24);
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
 })();
 </script>
 </body>
